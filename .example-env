@@ -1,0 +1,13 @@
+# App
+APP_HOST=localhost
+APP_PORT=8080
+APP_ENV=development
+APP_SECRET=f8d2e9a1b4c7m5n6p8q3r7t9v2x4z6y0h1j3k5w9
+
+# Databases
+DB_HOST=localhost
+DB_PORT=3306
+DB_NAME=service_monitoring
+DB_USER=root
+DB_PASS=
+
