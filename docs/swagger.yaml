@@ -92,6 +92,11 @@ definitions:
       report_type:
         description: e.g., "instance_summary", "service_uptime"
         type: string
+      status:
+        description: e.g., "pending", "generating", "completed", "failed"
+        type: string
+      updated_at:
+        type: string
       user_id:
         type: string
     type: object
@@ -189,12 +194,12 @@ info:
     email: support@swagger.io
     name: API Support
     url: http://www.swagger.io/support
-  description: This is the API documentation for the Monitron Backend.
+  description: This is the API documentation for the Monitron application.
   license:
     name: Apache 2.0
     url: http://www.apache.org/licenses/LICENSE-2.0.html
   termsOfService: http://swagger.io/terms/
-  title: Monitron Backend API
+  title: Monitron API
   version: "1.0"
 paths:
   /auth/login:
@@ -458,35 +463,29 @@ paths:
     post:
       consumes:
       - application/json
-      description: Execute a GraphQL query against the Monitron API
+      description: Access the GraphQL API for querying data
       parameters:
-      - description: GraphQL query payload
+      - description: GraphQL query
         in: body
         name: query
         required: true
         schema:
-          type: object
+          type: string
       produces:
       - application/json
       responses:
         "200":
-          description: 'data": "<GraphQL_Response>'
+          description: OK
           schema:
             additionalProperties: true
             type: object
         "400":
-          description: 'error": "Cannot parse JSON'
+          description: 'error": "Invalid request'
           schema:
             additionalProperties:
               type: string
             type: object
-        "500":
-          description: 'error": "Failed to execute GraphQL query'
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Execute GraphQL query
+      summary: GraphQL Endpoint
       tags:
       - GraphQL
   /instances:

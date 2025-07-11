@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"os"
 	"os/signal"
 	"strconv"
@@ -9,13 +8,14 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/robfig/cron/v3"
+	"github.com/rs/zerolog/log"
 
 	"monitron-server/config"
 	"monitron-server/database"
 	"monitron-server/messaging"
 	"monitron-server/router"
+	"monitron-server/utils"
 )
-
 // @title Monitron API
 // @version 1.0
 // @description This is the API documentation for the Monitron application.
@@ -36,6 +36,7 @@ import (
 // @name Authorization
 
 func main() {
+	utils.InitLogger()
 	cfg := config.LoadConfig()
 
 	// Initialize database
@@ -60,9 +61,9 @@ func main() {
 
 	// Start server in a goroutine
 	go func() {
-		log.Printf("Server is running on %s:%d", cfg.App.Host, cfg.App.Port)
+		log.Info().Msgf("Server is running on %s:%d", cfg.App.Host, cfg.App.Port)
 		if err := app.Listen(cfg.App.Host + ":" + strconv.Itoa(cfg.App.Port)); err != nil {
-			log.Fatalf("Error starting server: %v", err)
+			log.Fatal().Err(err).Msg("Error starting server")
 		}
 	}()
 
@@ -71,9 +72,11 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Println("Shutting down server...")
+	log.Info().Msg("Shutting down server...")
 	if err := app.Shutdown(); err != nil {
-		log.Fatalf("Error shutting down server: %v", err)
+		log.Fatal().Err(err).Msg("Error shutting down server")
 	}
-	log.Println("Server gracefully stopped.")
+	log.Info().Msg("Server gracefully stopped.")
 }
+
+

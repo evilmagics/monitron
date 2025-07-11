@@ -420,7 +420,7 @@ const docTemplate = `{
         },
         "/graphql": {
             "post": {
-                "description": "Execute a GraphQL query against the Monitron API",
+                "description": "Access the GraphQL API for querying data",
                 "consumes": [
                     "application/json"
                 ],
@@ -430,37 +430,28 @@ const docTemplate = `{
                 "tags": [
                     "GraphQL"
                 ],
-                "summary": "Execute GraphQL query",
+                "summary": "GraphQL Endpoint",
                 "parameters": [
                     {
-                        "description": "GraphQL query payload",
+                        "description": "GraphQL query",
                         "name": "query",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "type": "object"
+                            "type": "string"
                         }
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "data\": \"\u003cGraphQL_Response\u003e",
+                        "description": "OK",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
                         }
                     },
                     "400": {
-                        "description": "error\": \"Cannot parse JSON",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "error\": \"Failed to execute GraphQL query",
+                        "description": "error\": \"Invalid request",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1721,6 +1712,13 @@ const docTemplate = `{
                     "description": "e.g., \"instance_summary\", \"service_uptime\"",
                     "type": "string"
                 },
+                "status": {
+                    "description": "e.g., \"pending\", \"generating\", \"completed\", \"failed\"",
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
                 "user_id": {
                     "type": "string"
                 }
@@ -1869,8 +1867,8 @@ var SwaggerInfo = &swag.Spec{
 	Host:             "localhost:3000",
 	BasePath:         "/api/v1",
 	Schemes:          []string{},
-	Title:            "Monitron Backend API",
-	Description:      "This is the API documentation for the Monitron Backend.",
+	Title:            "Monitron API",
+	Description:      "This is the API documentation for the Monitron application.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

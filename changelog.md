@@ -16,3 +16,10 @@
 ### Removed
 
 
+
+
+### Added
+- Implemented Zerolog for structured logging.
+- Generated Swagger API documentation.
+
+
