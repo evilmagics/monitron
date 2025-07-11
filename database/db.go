@@ -2,7 +2,7 @@ package database
 
 import (
 	"fmt"
-	"log"
+	"github.com/rs/zerolog/log"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -21,10 +21,9 @@ func InitDB(cfg *config.Config) *gorm.DB {
 	var err error
 	db, err := gorm.Open(postgres.Open(dbURI), &gorm.Config{})
 	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
-	}
+			log.Fatal().Err(err).Msg("Failed to connect to database")
 
-	log.Println("Successfully connected to database!")
+	log.Info().Msg("Successfully connected to database!")
 
 	// Run migrations using the sqlx driver for golang-migrate
 	m, err := migrate.New(
@@ -32,14 +31,12 @@ func InitDB(cfg *config.Config) *gorm.DB {
 		fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s", cfg.Database.User, cfg.Database.Password, cfg.Database.Host, cfg.Database.Port, cfg.Database.DBName, cfg.Database.SSLMode),
 	)
 	if err != nil {
-		log.Fatalf("Failed to create migrate instance: %v", err)
-	}
+		log.Fatal().Err(err).Msg("Failed to create migrate instance")
 
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
-		log.Fatalf("Failed to run migrations: %v", err)
-	}
+			log.Fatal().Err(err).Msg("Failed to run migrations")
 
-	log.Println("Database migrations applied successfully!")
+	log.Info().Msg("Database migrations applied successfully!")
 	return db
 }
 
@@ -47,10 +44,10 @@ func CloseDB(db *gorm.DB) {
 	if db != nil {
 		sqlDB, err := db.DB()
 		if err != nil {
-			log.Printf("Error getting *sql.DB from GORM for closing: %v", err)
-			return
+				log.Error().Err(err).Msg("Error getting *sql.DB from GORM for closing")
+				return
 		}
 		sqlDB.Close()
-		log.Println("Database connection closed.")
+		log.Info().Msg("Database connection closed.")
 	}
 }

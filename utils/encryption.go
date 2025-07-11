@@ -70,8 +70,7 @@ func Decrypt(encryptedData string, cfg *config.Config) ([]byte, error) {
 func GenerateRandomKey() string {
 	key := make([]byte, 32) // AES-256 requires a 32-byte key
 		if _, err := io.ReadFull(rand.Reader, key); err != nil {
-		log.Fatalf("Failed to generate random key: %v", err)
-	}
+			log.Fatal().Err(err).Msg("Failed to generate random key")
 	return base64.StdEncoding.EncodeToString(key)
 }
 

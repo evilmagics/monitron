@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"log"
+	"github.com/rs/zerolog/log"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -38,8 +38,7 @@ func RegisterUser(db *gorm.DB) fiber.Handler {
 		// Hash password
 		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
 		if err != nil {
-			log.Printf("Error hashing password: %v", err)
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not hash password"})
+			log.Error().Err(err).Msg("Error hashing password")
 		}
 		user.Password = string(hashedPassword)
 
@@ -50,8 +49,7 @@ func RegisterUser(db *gorm.DB) fiber.Handler {
 		user.UpdatedAt = time.Now()
 
 		if result := db.Create(&user); result.Error != nil {
-			log.Printf("Error inserting user: %v", result.Error)
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not register user"})
+			log.Error().Err(result.Error).Msg("Error inserting user")
 		}
 
 		// Do not return password hash
@@ -101,12 +99,11 @@ func LoginUser(db *gorm.DB) fiber.Handler {
 		now := time.Now()
 		user.LastLogin = &now
 		if result := db.Save(&user); result.Error != nil {
-			log.Printf("Error updating last login: %v", result.Error)
-		}
+			log.Error().Err(result.Error).Msg("Error updating last login")
 
 		token, err := utils.GenerateJWT(user.ID, user.Role)
 		if err != nil {
-			log.Printf("Error generating JWT: %v", err)
+			log.Error().Err(err).Msg("Error generating JWT")
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not generate token"})
 		}
 

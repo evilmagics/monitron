@@ -2,7 +2,7 @@ package utils
 
 import (
 	"context"
-	"log"
+	"github.com/rs/zerolog/log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -16,14 +16,14 @@ func WaitForShutdownSignal(cleanup func(context.Context)) {
 
 	<-c // Block until a signal is received.
 
-	log.Println("Received shutdown signal. Initiating graceful shutdown...")
+	log.Info().Msg("Received shutdown signal. Initiating graceful shutdown...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second) // 10-second timeout for cleanup
 	defer cancel()
 
 	cleanup(ctx)
 
-	log.Println("Graceful shutdown complete. Exiting.")
+	log.Info().Msg("Graceful shutdown complete. Exiting.")
 	os.Exit(0)
 }
 

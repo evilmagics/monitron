@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"log"
+	"github.com/rs/zerolog/log"
 	"time"
 
 	"errors"
@@ -37,8 +37,7 @@ func CreateDomainSSL(db *gorm.DB) fiber.Handler {
 		domainSSL.UpdatedAt = time.Now()
 
 		if result := db.Create(&domainSSL); result.Error != nil {
-			log.Printf("Error creating domain/SSL entry: %v", result.Error)
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not create domain/SSL entry"})
+			log.Error().Err(result.Error).Msg("Error creating domain/SSL entry")			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not create domain/SSL entry"})
 		}
 
 		return c.Status(fiber.StatusCreated).JSON(domainSSL)
@@ -58,8 +57,7 @@ func GetDomainSSLs(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		domainSSLs := []models.DomainSSL{}
 		if result := db.Find(&domainSSLs); result.Error != nil {
-			log.Printf("Error fetching domain/SSLs: %v", result.Error)
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not retrieve domain/SSL entries"})
+			log.Error().Err(result.Error).Msg("Error fetching domain/SSLs")return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not retrieve domain/SSL entries"})
 		}
 
 		return c.JSON(domainSSLs)
@@ -91,7 +89,7 @@ func GetDomainSSL(db *gorm.DB) fiber.Handler {
 			if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Domain/SSL entry not found"})
 			}
-			log.Printf("Error fetching domain/SSL: %v", result.Error)
+			log.Error().Err(result.Error).Msg("Error fetching domain/SSL")
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not retrieve domain/SSL entry"})
 		}
 
@@ -131,13 +129,12 @@ func UpdateDomainSSL(db *gorm.DB) fiber.Handler {
 			if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Domain/SSL entry not found"})
 			}
-			log.Printf("Error finding domain/SSL for update: %v", result.Error)
+			log.Error().Err(result.Error).Msg("Error finding domain/SSL for update")
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not update domain/SSL entry"})
 		}
 
 		if result := db.Model(&existingDomainSSL).Updates(domainSSL); result.Error != nil {
-			log.Printf("Error updating domain/SSL: %v", result.Error)
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not update domain/SSL entry"})
+			log.Error().Err(result.Error).Msg("Error updating domain/SSL")			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not update domain/SSL entry"})
 		}
 
 		return c.JSON(existingDomainSSL)

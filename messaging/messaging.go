@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"github.com/rs/zerolog/log"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -26,14 +26,14 @@ func InitRabbitMQ(cfg *config.Config) {
 	var err error
 	Conn, err = amqp.Dial(cfg.RabbitMQ.URL)
 	if err != nil {
-		log.Fatalf("Failed to connect to RabbitMQ: %v", err)
+		log.Fatal().Err(err).Msg("Failed to connect to RabbitMQ")
 	}
 
 	Channel, err = Conn.Channel()
 	if err != nil {
-		log.Fatalf("Failed to open a channel: %v", err)
+		log.Fatal().Err(err).Msg("Failed to open a channel")
 	}
-	log.Println("Successfully connected to RabbitMQ")
+	log.Info().Msg("Successfully connected to RabbitMQ")
 }
 
 // CloseRabbitMQ closes the RabbitMQ channel and connection
@@ -44,7 +44,7 @@ func CloseRabbitMQ() {
 	if Conn != nil {
 		Conn.Close()
 	}
-	log.Println("RabbitMQ connection closed")
+	log.Info().Msg("RabbitMQ connection closed")
 }
 
 // PublishMessage publishes a message to the specified queue
@@ -80,14 +80,14 @@ func PublishMessage(queueName string, body []byte) error {
 	if err != nil {
 		return fmt.Errorf("Failed to publish a message: %w", err)
 	}
-	log.Printf(" [x] Sent %s to %s", body, queueName)
+	log.Info().Msgf(" [x] Sent %s to %s", body, queueName)
 	return nil
 }
 
 // ConsumeMessages consumes messages from the specified queue
 func ConsumeMessages(queueName string, handler func([]byte)) {
 	if Channel == nil {
-		log.Fatalf("RabbitMQ channel is not initialized")
+		log.Fatal().Err(fmt.Errorf("RabbitMQ channel is not initialized")).Msg("RabbitMQ channel is not initialized")
 	}
 
 	q, err := Channel.QueueDeclare(
@@ -99,7 +99,7 @@ func ConsumeMessages(queueName string, handler func([]byte)) {
 		nil,       // arguments
 	)
 	if err != nil {
-		log.Fatalf("Failed to declare a queue: %v", err)
+		log.Fatal().Err(err).Msg("Failed to declare a queue")
 	}
 
 	msgs, err := Channel.Consume(
@@ -112,20 +112,20 @@ func ConsumeMessages(queueName string, handler func([]byte)) {
 		nil,    // args
 	)
 	if err != nil {
-		log.Fatalf("Failed to register a consumer: %v", err)
+		log.Fatal().Err(err).Msg("Failed to register a consumer")
 	}
 
 	var forever chan struct{}
 
 	go func() {
 		for d := range msgs {
-			log.Printf("Received a message from %s: %s", queueName, d.Body)
+			log.Info().Msgf("Received a message from %s: %s", queueName, d.Body)
 			handler(d.Body)
 			d.Ack(false)
 		}
 	}()
 
-	log.Printf(" [*] Waiting for messages in %s. To exit press CTRL+C", queueName)
+	log.Info().Msgf(" [*] Waiting for messages in %s. To exit press CTRL+C", queueName)
 	<-forever
 }
 
@@ -133,17 +133,17 @@ func ConsumeMessages(queueName string, handler func([]byte)) {
 func SetupConsumers() {
 	// Example: Report generation consumer
 	go ConsumeMessages("report_generation_queue", func(body []byte) {
-		log.Printf("Processing report generation task: %s", string(body))
+		log.Info().Msgf("Processing report generation task: %s", string(body))
 		var report models.Report
 		if err := json.Unmarshal(body, &report); err != nil {
-			log.Printf("Error unmarshalling report details: %v", err)
+			log.Error().Err(err).Msg("Error unmarshalling report details")
 			return
 		}
 
 		// Simulate report generation and save to file
 		filePath, err := reportgen.GenerateReportFile(report)
 		if err != nil {
-			log.Printf("Error generating report file: %v", err)
+			log.Error().Err(err).Msg("Error generating report file")
 			return
 		}
 
@@ -151,35 +151,35 @@ func SetupConsumers() {
 		// This requires a DB connection, which is not directly available in consumer goroutine.
 		// In a real app, you'd pass the DB connection or use a service layer.
 		// For now, we'll just log it.
-		log.Printf("Report %s generated and saved to: %s", report.ID, filePath)
+		log.Info().Msgf("Report %s generated and saved to: %s", report.ID, filePath)
 
 		// TODO: Update report entry in database with file_path
 		// Example: db.Exec(`UPDATE reports SET file_path = $1 WHERE id = $2`, filePath, report.ID)
 
-		log.Printf("Report generation task completed for: %s", string(body))
+		log.Info().Msgf("Report generation task completed for: %s", string(body))
 	})
 
 	// Email sending consumer
 	go ConsumeMessages("email_sending_queue", func(body []byte) {
-		log.Printf("Processing email sending task: %s", string(body))
+		log.Info().Msgf("Processing email sending task: %s", string(body))
 		var emailDetails struct {
 			To      string `json:"to"`
 			Subject string `json:"subject"`
 			Body    string `json:"body"`
 		}
 		if err := json.Unmarshal(body, &emailDetails); err != nil {
-			log.Printf("Error unmarshalling email details: %v", err)
+			log.Error().Err(err).Msg("Error unmarshalling email details")
 			return
 		}
 
 		cfg := config.LoadConfig()
 		err := utils.SendEmail(cfg, emailDetails.To, emailDetails.Subject, emailDetails.Body)
 		if err != nil {
-			log.Printf("Error sending email: %v", err)
+			log.Error().Err(err).Msg("Error sending email")
 			// TODO: Implement retry logic or move to DLQ
 			return
 		}
-		log.Printf("Email sent successfully to: %s", emailDetails.To)
+		log.Info().Msgf("Email sent successfully to: %s", emailDetails.To)
 	})
 
 	// TODO: Add more consumers for other background tasks (e.g., health checks, notifications)
