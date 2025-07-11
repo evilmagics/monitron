@@ -55,8 +55,9 @@ func main() {
 
 	// Initialize and start cron scheduler
 	c := cron.New()
-	// Example: Schedule a report generation every minute
-	// c.AddFunc("@every 1m", func() { log.Println("Running scheduled report generation") })
+	c.AddFunc("@every 1m", func() { handlers.ServiceHealthCheck(db) })
+	c.AddFunc("@every 1m", func() { handlers.InstanceHealthCheck(db) })
+	c.AddFunc("@every 1m", func() { handlers.DomainSSLHealthCheck(db) })
 	c.Start()
 	defer c.Stop()
 

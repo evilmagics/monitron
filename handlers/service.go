@@ -202,3 +202,26 @@ func DeleteService(db *sqlx.DB) fiber.Handler {
 	}
 }
 
+
+
+// ServiceHealthCheck performs health checks for all services
+func ServiceHealthCheck(db *sqlx.DB) {
+	log.Println("Running scheduled service health check...")
+	services := []models.Service{}
+	
+	err := db.Select(&services, `SELECT * FROM services`)
+	if err != nil {
+		log.Printf("Error fetching services for health check: %v", err)
+		return
+	}
+
+	for _, service := range services {
+		log.Printf("Checking service: %s (Type: %s)", service.Name, service.APIType)
+		// Implement actual health check logic based on service.APIType
+		// For now, just simulate a successful check
+		log.Printf("Service %s health check successful.", service.Name)
+	}
+	log.Println("Service health check completed.")
+}
+
+

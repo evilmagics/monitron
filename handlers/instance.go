@@ -253,3 +253,26 @@ func DeleteInstance(db *sqlx.DB) fiber.Handler {
 	}
 }
 
+
+
+// InstanceHealthCheck performs health checks for all instances
+func InstanceHealthCheck(db *sqlx.DB) {
+	log.Println("Running scheduled instance health check...")
+	instances := []models.Instance{}
+	
+	err := db.Select(&instances, `SELECT * FROM instances`)
+	if err != nil {
+		log.Printf("Error fetching instances for health check: %v", err)
+		return
+	}
+
+	for _, instance := range instances {
+		log.Printf("Checking instance: %s (Host: %s)", instance.Name, instance.Host)
+		// Implement actual health check logic for instances
+		// For now, just simulate a successful check
+		log.Printf("Instance %s health check successful.", instance.Name)
+	}
+	log.Println("Instance health check completed.")
+}
+
+

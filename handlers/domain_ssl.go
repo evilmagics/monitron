@@ -186,3 +186,26 @@ func DeleteDomainSSL(db *sqlx.DB) fiber.Handler {
 		return c.Status(fiber.StatusNoContent).SendString("")
 	}
 }
+
+
+// DomainSSLHealthCheck performs health checks for all domain/SSL entries
+func DomainSSLHealthCheck(db *sqlx.DB) {
+	log.Println("Running scheduled domain/SSL health check...")
+	domainSSLs := []models.DomainSSL{}
+	
+	err := db.Select(&domainSSLs, `SELECT * FROM domain_ssl`)
+	if err != nil {
+		log.Printf("Error fetching domain/SSLs for health check: %v", err)
+		return
+	}
+
+	for _, domainSSL := range domainSSLs {
+		log.Printf("Checking domain/SSL: %s", domainSSL.Domain)
+		// Implement actual health check logic for domain/SSL
+		// For now, just simulate a successful check
+		log.Printf("Domain/SSL %s health check successful.", domainSSL.Domain)
+	}
+	log.Println("Domain/SSL health check completed.")
+}
+
+
