@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"net/http"
 	"time"
-)
 
+	"github.com/go-resty/resty/v2"
+)
 // Alert represents a single alert sent to Alertmanager
 type Alert struct {
 	Labels      map[string]string `json:"labels"`
@@ -50,14 +50,17 @@ func SendAlert(alertmanagerURL string, alert Alert) error {
 		return fmt.Errorf("failed to marshal alert payload: %w", err)
 	}
 
-	resp, err := http.Post(alertmanagerURL, "application/json", bytes.NewBuffer(jsonPayload))
+	client := resty.New()
+	resp, err := client.R().
+		SetHeader("Content-Type", "application/json").
+		SetBody(payload).
+		Post(alertmanagerURL)
 	if err != nil {
 		return fmt.Errorf("failed to send alert to Alertmanager: %w", err)
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("Alertmanager returned non-OK status: %s", resp.Status)
+	if resp.StatusCode() != http.StatusOK {
+		return fmt.Errorf("Alertmanager returned non-OK status: %s", resp.Status())
 	}
 
 	log.Printf("Alert sent to Alertmanager: %s", alert.Labels["alertname"])

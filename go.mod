@@ -1,6 +1,6 @@
 module monitron-server
 
-go 1.23.0
+go 1.18
 
 require (
 	github.com/gofiber/fiber/v2 v2.52.8
@@ -32,6 +32,7 @@ require (
 	github.com/go-openapi/jsonreference v0.19.6 // indirect
 	github.com/go-openapi/spec v0.20.4 // indirect
 	github.com/go-openapi/swag v0.19.15 // indirect
+	github.com/go-resty/resty/v2 v2.16.5 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
