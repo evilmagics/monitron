@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"log"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 
 	"monitron-server/models"
 )
+
 // CreateService
 // @Summary Create a new service
 // @Description Create a new monitoring service
@@ -138,6 +140,7 @@ func UpdateService(db *gorm.DB) fiber.Handler {
 		}
 
 		return c.JSON(existingService)
+	}
 }
 
 // DeleteService
@@ -163,9 +166,7 @@ func DeleteService(db *gorm.DB) fiber.Handler {
 		if result := db.Delete(&models.Service{}, "id = ?", uuidID); result.Error != nil {
 			log.Printf("Error deleting service: %v", result.Error)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not delete service"})
-		}
-
-		if result.RowsAffected == 0 {
+		} else if result.RowsAffected == 0 {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Service not found"})
 		}
 
@@ -173,17 +174,15 @@ func DeleteService(db *gorm.DB) fiber.Handler {
 	}
 }
 
-
-
 // ServiceHealthCheck performs health checks for all services
 func ServiceHealthCheck(db *gorm.DB) {
 	log.Println("Running scheduled service health check...")
 	services := []models.Service{}
-	
-		if result := db.Find(&services); result.Error != nil {
-			log.Printf("Error fetching services for health check: %v", result.Error)
-			return
-		}
+
+	if result := db.Find(&services); result.Error != nil {
+		log.Printf("Error fetching services for health check: %v", result.Error)
+		return
+	}
 
 	for _, service := range services {
 		log.Printf("Checking service: %s (Type: %s)", service.Name, service.APIType)
@@ -193,5 +192,3 @@ func ServiceHealthCheck(db *gorm.DB) {
 	}
 	log.Println("Service health check completed.")
 }
-
-

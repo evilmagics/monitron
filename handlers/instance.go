@@ -4,15 +4,17 @@ import (
 	"log"
 	"time"
 
+	"errors"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
-	"errors"
 
 	"monitron-server/config"
 	"monitron-server/models"
 	"monitron-server/utils"
 )
+
 // CreateInstance
 // @Summary Create a new instance
 // @Description Create a new monitoring instance
@@ -191,8 +193,7 @@ func UpdateInstance(db *gorm.DB) fiber.Handler {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not update instance"})
 		}
 
-		if result := db.Model(&existingInstance).Updates(instance);
-		if result.Error != nil {
+		if result := db.Model(&existingInstance).Updates(instance); result.Error != nil {
 			log.Printf("Error updating instance: %v", result.Error)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not update instance"})
 		}
@@ -209,6 +210,8 @@ func UpdateInstance(db *gorm.DB) fiber.Handler {
 		}
 
 		return c.JSON(existingInstance)
+	}
+}
 
 // DeleteInstance
 // @Summary Delete an instance
@@ -233,9 +236,7 @@ func DeleteInstance(db *gorm.DB) fiber.Handler {
 		if result := db.Delete(&models.Instance{}, "id = ?", uuidID); result.Error != nil {
 			log.Printf("Error deleting instance: %v", result.Error)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not delete instance"})
-		}
-
-		if result.RowsAffected == 0 {
+		} else if result.RowsAffected == 0 {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Instance not found"})
 		}
 
@@ -243,17 +244,15 @@ func DeleteInstance(db *gorm.DB) fiber.Handler {
 	}
 }
 
-
-
 // InstanceHealthCheck performs health checks for all instances
 func InstanceHealthCheck(db *gorm.DB) {
 	log.Println("Running scheduled instance health check...")
 	instances := []models.Instance{}
-	
-		if result := db.Find(&instances); result.Error != nil {
-			log.Printf("Error fetching instances for health check: %v", result.Error)
-			return
-		}
+
+	if result := db.Find(&instances); result.Error != nil {
+		log.Printf("Error fetching instances for health check: %v", result.Error)
+		return
+	}
 
 	for _, instance := range instances {
 		log.Printf("Checking instance: %s (Host: %s)", instance.Name, instance.Host)
@@ -263,5 +262,3 @@ func InstanceHealthCheck(db *gorm.DB) {
 	}
 	log.Println("Instance health check completed.")
 }
-
-

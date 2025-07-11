@@ -16,6 +16,10 @@ type OperationalPage struct {
 	UpdatedAt   time.Time `db:"updated_at" json:"updated_at"`
 }
 
+func (p *OperationalPage) TableName() string {
+	return "operational_pages"
+}
+
 type OperationalPageComponent struct {
 	ID            uuid.UUID `db:"id" json:"id"`
 	PageID        uuid.UUID `db:"page_id" json:"page_id"`
@@ -28,6 +32,10 @@ type OperationalPageComponent struct {
 	UpdatedAt     time.Time `db:"updated_at" json:"updated_at"`
 }
 
+func (c *OperationalPageComponent) TableName() string {
+	return "operational_page_components"
+}
+
 // OperationalPageStats represents aggregated stats for an operational page
 type OperationalPageStats struct {
 	PageID              uuid.UUID `db:"page_id" json:"page_id"`
@@ -36,4 +44,8 @@ type OperationalPageStats struct {
 	AverageResponseTime float64   `db:"average_response_time" json:"average_response_time"`
 	UptimeHistory       string    `db:"uptime_history" json:"uptime_history"` // JSON string of 30-day history
 	LastUpdated         time.Time `db:"last_updated" json:"last_updated"`
+}
+
+func (s *OperationalPageStats) TableName() string {
+	return "operational_page_stats"
 }

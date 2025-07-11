@@ -27,11 +27,6 @@ func InitDB(cfg *config.Config) *gorm.DB {
 	log.Println("Successfully connected to database!")
 
 	// Run migrations using the sqlx driver for golang-migrate
-	sqlDB, err := db.DB()
-	if err != nil {
-		log.Fatalf("Failed to get *sql.DB from GORM: %v", err)
-	}
-
 	m, err := migrate.New(
 		"file://database/migrations",
 		fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s", cfg.Database.User, cfg.Database.Password, cfg.Database.Host, cfg.Database.Port, cfg.Database.DBName, cfg.Database.SSLMode),

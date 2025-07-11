@@ -5,10 +5,11 @@ import (
 	"log"
 
 	"github.com/graphql-go/graphql"
-	"github.com/jmoiron/sqlx"
+	"gorm.io/gorm"
 
 	"monitron-server/models"
 )
+
 // InstanceType defines the GraphQL type for an Instance
 var InstanceType = graphql.NewObject(graphql.ObjectConfig{
 	Name: "Instance",
@@ -32,32 +33,32 @@ var InstanceType = graphql.NewObject(graphql.ObjectConfig{
 var ServiceType = graphql.NewObject(graphql.ObjectConfig{
 	Name: "Service",
 	Fields: graphql.Fields{
-		"id":               &graphql.Field{Type: graphql.ID},
-		"name":             &graphql.Field{Type: graphql.String},
-		"api_type":         &graphql.Field{Type: graphql.String},
-		"check_interval":   &graphql.Field{Type: graphql.Int},
-		"timeout":          &graphql.Field{Type: graphql.Int},
-		"description":      &graphql.Field{Type: graphql.String},
-		"label":            &graphql.Field{Type: graphql.String},
-		"group":            &graphql.Field{Type: graphql.String},
-		"http_method":      &graphql.Field{Type: graphql.String},
-		"http_health_url":  &graphql.Field{Type: graphql.String},
+		"id":                   &graphql.Field{Type: graphql.ID},
+		"name":                 &graphql.Field{Type: graphql.String},
+		"api_type":             &graphql.Field{Type: graphql.String},
+		"check_interval":       &graphql.Field{Type: graphql.Int},
+		"timeout":              &graphql.Field{Type: graphql.Int},
+		"description":          &graphql.Field{Type: graphql.String},
+		"label":                &graphql.Field{Type: graphql.String},
+		"group":                &graphql.Field{Type: graphql.String},
+		"http_method":          &graphql.Field{Type: graphql.String},
+		"http_health_url":      &graphql.Field{Type: graphql.String},
 		"http_expected_status": &graphql.Field{Type: graphql.Int},
-		"grpc_host":        &graphql.Field{Type: graphql.String},
-		"grpc_port":        &graphql.Field{Type: graphql.Int},
-		"grpc_auth":        &graphql.Field{Type: graphql.String},
-		"grpc_proto":       &graphql.Field{Type: graphql.String},
-		"mqtt_host":        &graphql.Field{Type: graphql.String},
-		"mqtt_port":        &graphql.Field{Type: graphql.Int},
-		"mqtt_qos":         &graphql.Field{Type: graphql.Int},
-		"mqtt_topic":       &graphql.Field{Type: graphql.String},
-		"mqtt_auth":        &graphql.Field{Type: graphql.String},
-		"tcp_host":         &graphql.Field{Type: graphql.String},
-		"tcp_port":         &graphql.Field{Type: graphql.Int},
-		"dns_domain_name":  &graphql.Field{Type: graphql.String},
-		"ping_host":        &graphql.Field{Type: graphql.String},
-		"created_at":       &graphql.Field{Type: graphql.DateTime},
-		"updated_at":       &graphql.Field{Type: graphql.DateTime},
+		"grpc_host":            &graphql.Field{Type: graphql.String},
+		"grpc_port":            &graphql.Field{Type: graphql.Int},
+		"grpc_auth":            &graphql.Field{Type: graphql.String},
+		"grpc_proto":           &graphql.Field{Type: graphql.String},
+		"mqtt_host":            &graphql.Field{Type: graphql.String},
+		"mqtt_port":            &graphql.Field{Type: graphql.Int},
+		"mqtt_qos":             &graphql.Field{Type: graphql.Int},
+		"mqtt_topic":           &graphql.Field{Type: graphql.String},
+		"mqtt_auth":            &graphql.Field{Type: graphql.String},
+		"tcp_host":             &graphql.Field{Type: graphql.String},
+		"tcp_port":             &graphql.Field{Type: graphql.Int},
+		"dns_domain_name":      &graphql.Field{Type: graphql.String},
+		"ping_host":            &graphql.Field{Type: graphql.String},
+		"created_at":           &graphql.Field{Type: graphql.DateTime},
+		"updated_at":           &graphql.Field{Type: graphql.DateTime},
 	},
 })
 
@@ -65,19 +66,19 @@ var ServiceType = graphql.NewObject(graphql.ObjectConfig{
 var DomainSSLType = graphql.NewObject(graphql.ObjectConfig{
 	Name: "DomainSSL",
 	Fields: graphql.Fields{
-		"id":                &graphql.Field{Type: graphql.ID},
-		"domain":            &graphql.Field{Type: graphql.String},
-		"warning_threshold": &graphql.Field{Type: graphql.Int},
-		"expiry_threshold":  &graphql.Field{Type: graphql.Int},
-		"check_interval":    &graphql.Field{Type: graphql.Int},
-		"label":             &graphql.Field{Type: graphql.String},
+		"id":                 &graphql.Field{Type: graphql.ID},
+		"domain":             &graphql.Field{Type: graphql.String},
+		"warning_threshold":  &graphql.Field{Type: graphql.Int},
+		"expiry_threshold":   &graphql.Field{Type: graphql.Int},
+		"check_interval":     &graphql.Field{Type: graphql.Int},
+		"label":              &graphql.Field{Type: graphql.String},
 		"certificate_detail": &graphql.Field{Type: graphql.String},
-		"issuer":            &graphql.Field{Type: graphql.String},
-		"valid_from":        &graphql.Field{Type: graphql.DateTime},
-		"resolved_ip":       &graphql.Field{Type: graphql.String},
-		"expiry":            &graphql.Field{Type: graphql.DateTime},
-		"created_at":        &graphql.Field{Type: graphql.DateTime},
-		"updated_at":        &graphql.Field{Type: graphql.DateTime},
+		"issuer":             &graphql.Field{Type: graphql.String},
+		"valid_from":         &graphql.Field{Type: graphql.DateTime},
+		"resolved_ip":        &graphql.Field{Type: graphql.String},
+		"expiry":             &graphql.Field{Type: graphql.DateTime},
+		"created_at":         &graphql.Field{Type: graphql.DateTime},
+		"updated_at":         &graphql.Field{Type: graphql.DateTime},
 	},
 })
 
@@ -100,16 +101,16 @@ var UserType = graphql.NewObject(graphql.ObjectConfig{
 var ReportType = graphql.NewObject(graphql.ObjectConfig{
 	Name: "Report",
 	Fields: graphql.Fields{
-		"id":          &graphql.Field{Type: graphql.ID},
-		"name":        &graphql.Field{Type: graphql.String},
-		"report_type": &graphql.Field{Type: graphql.String},
-		"format":      &graphql.Field{Type: graphql.String},
-		"status":      &graphql.Field{Type: graphql.String},
+		"id":           &graphql.Field{Type: graphql.ID},
+		"name":         &graphql.Field{Type: graphql.String},
+		"report_type":  &graphql.Field{Type: graphql.String},
+		"format":       &graphql.Field{Type: graphql.String},
+		"status":       &graphql.Field{Type: graphql.String},
 		"generated_at": &graphql.Field{Type: graphql.DateTime},
-		"file_path":   &graphql.Field{Type: graphql.String},
-		"user_id":     &graphql.Field{Type: graphql.ID},
-		"created_at":  &graphql.Field{Type: graphql.DateTime},
-		"updated_at":  &graphql.Field{Type: graphql.DateTime},
+		"file_path":    &graphql.Field{Type: graphql.String},
+		"user_id":      &graphql.Field{Type: graphql.ID},
+		"created_at":   &graphql.Field{Type: graphql.DateTime},
+		"updated_at":   &graphql.Field{Type: graphql.DateTime},
 	},
 })
 
@@ -157,7 +158,7 @@ var OperationalPageComponentType = graphql.NewObject(graphql.ObjectConfig{
 })
 
 // RootQuery defines the root query for GraphQL
-func RootQuery(db *sqlx.DB) *graphql.Object {
+func RootQuery(db *gorm.DB) *graphql.Object {
 	return graphql.NewObject(graphql.ObjectConfig{
 		Name: "RootQuery",
 		Fields: graphql.Fields{
@@ -166,7 +167,7 @@ func RootQuery(db *sqlx.DB) *graphql.Object {
 				Description: "Get all instances",
 				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 					var instances []models.Instance
-					err := db.Select(&instances, `SELECT * FROM instances`)
+					err := db.Find(&instances).Error
 					if err != nil {
 						log.Printf("Error fetching instances for GraphQL: %v", err)
 						return nil, err
@@ -188,7 +189,7 @@ func RootQuery(db *sqlx.DB) *graphql.Object {
 						return nil, fmt.Errorf("invalid instance ID")
 					}
 					var instance models.Instance
-					err := db.Get(&instance, `SELECT * FROM instances WHERE id = $1`, id)
+					err := db.Find(&instance, id).Error
 					if err != nil {
 						log.Printf("Error fetching instance for GraphQL: %v", err)
 						return nil, err
@@ -201,7 +202,7 @@ func RootQuery(db *sqlx.DB) *graphql.Object {
 				Description: "Get all services",
 				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 					var services []models.Service
-					err := db.Select(&services, `SELECT * FROM services`)
+					err := db.Find(&services).Error
 					if err != nil {
 						log.Printf("Error fetching services for GraphQL: %v", err)
 						return nil, err
@@ -223,7 +224,7 @@ func RootQuery(db *sqlx.DB) *graphql.Object {
 						return nil, fmt.Errorf("invalid service ID")
 					}
 					var service models.Service
-					err := db.Get(&service, `SELECT * FROM services WHERE id = $1`, id)
+					err := db.Find(&service, id).Error
 					if err != nil {
 						log.Printf("Error fetching service for GraphQL: %v", err)
 						return nil, err
@@ -236,7 +237,7 @@ func RootQuery(db *sqlx.DB) *graphql.Object {
 				Description: "Get all domain/SSL entries",
 				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 					var domainSSLs []models.DomainSSL
-					err := db.Select(&domainSSLs, `SELECT * FROM domain_ssl`)
+					err := db.Find(&domainSSLs).Error
 					if err != nil {
 						log.Printf("Error fetching domain/SSLs for GraphQL: %v", err)
 						return nil, err
@@ -258,7 +259,7 @@ func RootQuery(db *sqlx.DB) *graphql.Object {
 						return nil, fmt.Errorf("invalid domain/SSL ID")
 					}
 					var domainSSL models.DomainSSL
-					err := db.Get(&domainSSL, `SELECT * FROM domain_ssl WHERE id = $1`, id)
+					err := db.Find(&domainSSL, id).Error
 					if err != nil {
 						log.Printf("Error fetching domain/SSL for GraphQL: %v", err)
 						return nil, err
@@ -271,7 +272,7 @@ func RootQuery(db *sqlx.DB) *graphql.Object {
 				Description: "Get all users",
 				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 					var users []models.User
-					err := db.Select(&users, `SELECT id, username, email, role, status, last_login, created_at, updated_at FROM users`)
+					err := db.Select("id", "username", "role", "status", "last_login", "created_at", "updated_at").Find(&users).Error
 					if err != nil {
 						log.Printf("Error fetching users for GraphQL: %v", err)
 						return nil, err
@@ -293,7 +294,7 @@ func RootQuery(db *sqlx.DB) *graphql.Object {
 						return nil, fmt.Errorf("invalid user ID")
 					}
 					var user models.User
-					err := db.Get(&user, `SELECT id, username, email, role, status, last_login, created_at, updated_at FROM users WHERE id = $1`, id)
+					err := db.Select("id", "username", "role", "status", "last_login", "created_at", "updated_at").Find(&user, id).Error
 					if err != nil {
 						log.Printf("Error fetching user for GraphQL: %v", err)
 						return nil, err
@@ -306,7 +307,7 @@ func RootQuery(db *sqlx.DB) *graphql.Object {
 				Description: "Get all reports",
 				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 					var reports []models.Report
-					err := db.Select(&reports, `SELECT * FROM reports`)
+					err := db.Find(&reports).Error
 					if err != nil {
 						log.Printf("Error fetching reports for GraphQL: %v", err)
 						return nil, err
@@ -328,7 +329,7 @@ func RootQuery(db *sqlx.DB) *graphql.Object {
 						return nil, fmt.Errorf("invalid report ID")
 					}
 					var report models.Report
-					err := db.Get(&report, `SELECT * FROM reports WHERE id = $1`, id)
+					err := db.Find(&report, id).Error
 					if err != nil {
 						log.Printf("Error fetching report for GraphQL: %v", err)
 						return nil, err
@@ -341,7 +342,7 @@ func RootQuery(db *sqlx.DB) *graphql.Object {
 				Description: "Get all log entries",
 				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 					var logEntries []models.LogEntry
-					err := db.Select(&logEntries, `SELECT * FROM log_entries ORDER BY timestamp DESC`)
+					err := db.Order("timestamp DESC").Find(&logEntries).Error
 					if err != nil {
 						log.Printf("Error fetching log entries for GraphQL: %v", err)
 						return nil, err
@@ -363,7 +364,7 @@ func RootQuery(db *sqlx.DB) *graphql.Object {
 						return nil, fmt.Errorf("invalid log entry ID")
 					}
 					var logEntry models.LogEntry
-					err := db.Get(&logEntry, `SELECT * FROM log_entries WHERE id = $1`, id)
+					err := db.Find(&logEntry, id).Error
 					if err != nil {
 						log.Printf("Error fetching log entry for GraphQL: %v", err)
 						return nil, err
@@ -376,7 +377,7 @@ func RootQuery(db *sqlx.DB) *graphql.Object {
 				Description: "Get all operational pages",
 				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 					var pages []models.OperationalPage
-					err := db.Select(&pages, `SELECT * FROM operational_pages`)
+					err := db.Find(&pages).Error
 					if err != nil {
 						log.Printf("Error fetching operational pages for GraphQL: %v", err)
 						return nil, err
@@ -398,7 +399,7 @@ func RootQuery(db *sqlx.DB) *graphql.Object {
 						return nil, fmt.Errorf("invalid operational page ID or slug")
 					}
 					var page models.OperationalPage
-					err := db.Get(&page, `SELECT * FROM operational_pages WHERE id = $1 OR slug = $1`, idOrSlug)
+					err := db.Where("id = ? OR slug = ?", idOrSlug, idOrSlug).Find(&page).Error
 					if err != nil {
 						log.Printf("Error fetching operational page for GraphQL: %v", err)
 						return nil, err
@@ -420,7 +421,7 @@ func RootQuery(db *sqlx.DB) *graphql.Object {
 						return nil, fmt.Errorf("invalid page ID")
 					}
 					var components []models.OperationalPageComponent
-					err := db.Select(&components, `SELECT * FROM operational_page_components WHERE page_id = $1 ORDER BY display_order ASC`, pageID)
+					err := db.Where("page_id = ?", pageID).Order("display_order ASC").Find(&components).Error
 					if err != nil {
 						log.Printf("Error fetching operational page components for GraphQL: %v", err)
 						return nil, err
@@ -433,11 +434,8 @@ func RootQuery(db *sqlx.DB) *graphql.Object {
 }
 
 // CreateSchema defines the executable GraphQL schema
-func CreateSchema(db *sqlx.DB) (graphql.Schema, error) {
+func CreateSchema(db *gorm.DB) (graphql.Schema, error) {
 	return graphql.NewSchema(graphql.SchemaConfig{
 		Query: RootQuery(db),
 	})
 }
-
-
-

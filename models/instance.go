@@ -21,6 +21,10 @@ type Instance struct {
 	UpdatedAt     time.Time `db:"updated_at" json:"updated_at"`
 }
 
+func (Instance) TableName() string {
+	return "instances"
+}
+
 type InstanceStats struct {
 	ID           uuid.UUID `db:"id" json:"id"`
 	InstanceID   uuid.UUID `db:"instance_id" json:"instance_id"`
@@ -32,12 +36,20 @@ type InstanceStats struct {
 	Timestamp    time.Time `db:"timestamp" json:"timestamp"`
 }
 
+func (InstanceStats) TableName() string {
+	return "instance_stats"
+}
+
 type InstanceMetric struct {
 	ID          uuid.UUID `db:"id" json:"id"`
 	InstanceID  uuid.UUID `db:"instance_id" json:"instance_id"`
 	MetricName  string    `db:"metric_name" json:"metric_name"`
 	MetricValue float64   `db:"metric_value" json:"metric_value"`
 	Timestamp   time.Time `db:"timestamp" json:"timestamp"`
+}
+
+func (InstanceMetric) TableName() string {
+	return "instance_metrics"
 }
 
 type DeviceInfo struct {
@@ -50,4 +62,8 @@ type DeviceInfo struct {
 	TotalMemory  int       `db:"total_memory" json:"total_memory"`
 	BootTime     time.Time `db:"boot_time" json:"boot_time"`
 	Timestamp    time.Time `db:"timestamp" json:"timestamp"`
+}
+
+func (DeviceInfo) TableName() string {
+	return "device_info"
 }

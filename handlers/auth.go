@@ -6,15 +6,13 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
-	"gorm.io/gorm"
 	"golang.org/x/crypto/bcrypt"
-	"github.com/go-playground/validator/v10"
+	"gorm.io/gorm"
 
 	"monitron-server/models"
 	"monitron-server/utils"
+	"monitron-server/utils/validate"
 )
-
-var validate = validator.New()
 
 // RegisterUser
 // @Summary Register a new user
@@ -34,7 +32,7 @@ func RegisterUser(db *gorm.DB) fiber.Handler {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot parse JSON"})
 		}
 
-		if err := validate.Struct(user); err != nil {
+		if err := validate.V.Struct(user); err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 		}
 		// Hash password
@@ -46,7 +44,7 @@ func RegisterUser(db *gorm.DB) fiber.Handler {
 		user.Password = string(hashedPassword)
 
 		user.ID = uuid.New()
-		user.Role = "user" // Default role
+		user.Role = "user"     // Default role
 		user.Status = "active" // Default status
 		user.CreatedAt = time.Now()
 		user.UpdatedAt = time.Now()
@@ -85,7 +83,7 @@ func LoginUser(db *gorm.DB) fiber.Handler {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot parse JSON"})
 		}
 
-		if err := validate.Struct(loginRequest); err != nil {
+		if err := validate.V.Struct(loginRequest); err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 		}
 		user := models.User{}
@@ -94,7 +92,7 @@ func LoginUser(db *gorm.DB) fiber.Handler {
 		}
 
 		// Compare password
-		err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(loginRequest.Password))
+		err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(loginRequest.Password))
 		if err != nil {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid credentials"})
 		}
@@ -116,4 +114,3 @@ func LoginUser(db *gorm.DB) fiber.Handler {
 		return c.JSON(fiber.Map{"message": "Login successful", "token": token, "user": user})
 	}
 }
-

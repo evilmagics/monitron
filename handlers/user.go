@@ -4,17 +4,16 @@ import (
 	"log"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
-	"github.com/google/uuid"
-	"gorm.io/gorm"
-	"golang.org/x/crypto/bcrypt"
-	"github.com/go-playground/validator/v10"
 	"errors"
 
-	"monitron-server/models"
-)
+	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 
-var validate = validator.New()
+	"monitron-server/models"
+	"monitron-server/utils/validate"
+)
 
 // GetUsers
 // @Summary Get all users (Admin Only)
@@ -106,7 +105,7 @@ func UpdateUser(db *gorm.DB) fiber.Handler {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not update user"})
 		}
 
-		if err := validate.Struct(user); err != nil {
+		if err := validate.V.Struct(user); err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 		}
 
@@ -117,6 +116,7 @@ func UpdateUser(db *gorm.DB) fiber.Handler {
 
 		return c.JSON(existingUser)
 	}
+}
 
 // DeleteUser
 // @Summary Delete a user (Admin Only)
@@ -141,9 +141,7 @@ func DeleteUser(db *gorm.DB) fiber.Handler {
 		if result := db.Delete(&models.User{}, "id = ?", uuidID); result.Error != nil {
 			log.Printf("Error deleting user: %v", result.Error)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not delete user"})
-		}
-
-		if result.RowsAffected == 0 {
+		} else if result.RowsAffected == 0 {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
 		}
 
@@ -173,7 +171,7 @@ func ChangePassword(db *gorm.DB) fiber.Handler {
 			NewPassword     string `json:"new_password"`
 		}{}
 
-		if err := validate.Struct(passwordChange); err != nil {
+		if err := validate.V.Struct(passwordChange); err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 		}
 
@@ -183,7 +181,7 @@ func ChangePassword(db *gorm.DB) fiber.Handler {
 		}
 
 		// Verify current password
-		err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(passwordChange.CurrentPassword))
+		err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(passwordChange.CurrentPassword))
 		if err != nil {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid current password"})
 		}
@@ -224,7 +222,7 @@ func ForgotPassword(db *gorm.DB) fiber.Handler {
 			Email string `json:"email"`
 		}{}
 
-		if err := validate.Struct(resetRequest); err != nil {
+		if err := validate.V.Struct(resetRequest); err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 		}
 
@@ -281,7 +279,7 @@ func ResetPassword(db *gorm.DB) fiber.Handler {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot parse JSON"})
 		}
 
-		if err := validate.Struct(resetRequest); err != nil {
+		if err := validate.V.Struct(resetRequest); err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 		}
 		passwordResetToken := models.PasswordResetToken{}
@@ -310,7 +308,7 @@ func ResetPassword(db *gorm.DB) fiber.Handler {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not reset password"})
 		}
 
-		// Invalidate the token
+		// Invalidate.V the token
 		if result := db.Delete(&passwordResetToken); result.Error != nil {
 			log.Printf("Error deleting password reset token: %v", result.Error)
 		}
@@ -318,4 +316,3 @@ func ResetPassword(db *gorm.DB) fiber.Handler {
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Password reset successfully"})
 	}
 }
-

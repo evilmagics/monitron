@@ -5,7 +5,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/graphql-go/handler"
-	"github.com/jmoiron/sqlx"
+	"gorm.io/gorm"
 
 	monitrongraphql "monitron-server/graphql"
 	"monitron-server/utils"
@@ -21,7 +21,7 @@ import (
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]string "error": "Invalid request"
 // @Router /graphql [post]
-func GraphQLHandler(db *sqlx.DB) fiber.Handler {
+func GraphQLHandler(db *gorm.DB) fiber.Handler {
 	// Create a GraphQL schema
 	schema, err := monitrongraphql.CreateSchema(db)
 	if err != nil {
@@ -40,5 +40,3 @@ func GraphQLHandler(db *sqlx.DB) fiber.Handler {
 		return nil
 	}
 }
-
-

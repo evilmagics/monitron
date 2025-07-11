@@ -11,6 +11,7 @@
 - Added input validation using go-playground/validator.
 
 ### Fixed
+- Migration from sqlX  to Gorm
 
 ### Removed
 

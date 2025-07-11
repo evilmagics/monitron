@@ -6,13 +6,13 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
-	"github.com/jmoiron/sqlx"
+	"gorm.io/gorm"
 
 	"monitron-server/models"
 )
 
 // CreateOperationalPage handles the creation of a new operational page
-func CreateOperationalPage(db *sqlx.DB) fiber.Handler {
+func CreateOperationalPage(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		page := new(models.OperationalPage)
 		if err := c.BodyParser(page); err != nil {
@@ -23,10 +23,7 @@ func CreateOperationalPage(db *sqlx.DB) fiber.Handler {
 		page.CreatedAt = time.Now()
 		page.UpdatedAt = time.Now()
 
-		query := `INSERT INTO operational_pages (id, slug, name, description, is_public, created_at, updated_at)
-				  VALUES (:id, :slug, :name, :description, :is_public, :created_at, :updated_at)`
-
-		_, err := db.NamedExec(query, page)
+		err := db.Create(page).Error
 		if err != nil {
 			log.Printf("Error inserting operational page: %v", err)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not create operational page"})
@@ -37,7 +34,7 @@ func CreateOperationalPage(db *sqlx.DB) fiber.Handler {
 }
 
 // GetOperationalPages handles fetching all operational pages
-func GetOperationalPages(db *sqlx.DB) fiber.Handler {
+func GetOperationalPages(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		pages := []models.OperationalPage{}
 		err := db.Select(&pages, `SELECT * FROM operational_pages`)
@@ -51,12 +48,12 @@ func GetOperationalPages(db *sqlx.DB) fiber.Handler {
 }
 
 // GetOperationalPage handles fetching a single operational page by ID or slug
-func GetOperationalPage(db *sqlx.DB) fiber.Handler {
+func GetOperationalPage(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		idOrSlug := c.Params("idOrSlug")
 
 		page := models.OperationalPage{}
-		err := db.Get(&page, `SELECT * FROM operational_pages WHERE id = $1 OR slug = $1`, idOrSlug)
+		err := db.Where("id = ? OR slug = ?", idOrSlug, idOrSlug).Error
 		if err != nil {
 			log.Printf("Error fetching operational page: %v", err)
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Operational page not found"})
@@ -67,7 +64,7 @@ func GetOperationalPage(db *sqlx.DB) fiber.Handler {
 }
 
 // UpdateOperationalPage handles updating an existing operational page
-func UpdateOperationalPage(db *sqlx.DB) fiber.Handler {
+func UpdateOperationalPage(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		idOrSlug := c.Params("idOrSlug")
 
@@ -78,24 +75,13 @@ func UpdateOperationalPage(db *sqlx.DB) fiber.Handler {
 
 		page.UpdatedAt = time.Now()
 
-		query := `UPDATE operational_pages SET slug = :slug, name = :name, description = :description, is_public = :is_public, updated_at = :updated_at
-				  WHERE id = :idOrSlug OR slug = :idOrSlug`
-
-		result, err := db.NamedExec(query, map[string]interface{}{
-			"slug": page.Slug,
-			"name": page.Name,
-			"description": page.Description,
-			"is_public": page.IsPublic,
-			"updated_at": page.UpdatedAt,
-			"idOrSlug": idOrSlug,
-		})
-		if err != nil {
-			log.Printf("Error updating operational page: %v", err)
+		result := db.Where("id = ? OR slug = ?", idOrSlug, idOrSlug).Updates(page)
+		if result.Error != nil {
+			log.Printf("Error updating operational page: %v", result.Error)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not update operational page"})
 		}
 
-		rowsAffected, _ := result.RowsAffected()
-		if rowsAffected == 0 {
+		if result.RowsAffected == 0 {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Operational page not found"})
 		}
 
@@ -104,18 +90,17 @@ func UpdateOperationalPage(db *sqlx.DB) fiber.Handler {
 }
 
 // DeleteOperationalPage handles deleting an operational page by ID or slug
-func DeleteOperationalPage(db *sqlx.DB) fiber.Handler {
+func DeleteOperationalPage(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		idOrSlug := c.Params("idOrSlug")
 
-		result, err := db.Exec(`DELETE FROM operational_pages WHERE id = $1 OR slug = $1`, idOrSlug)
-		if err != nil {
-			log.Printf("Error deleting operational page: %v", err)
+		result := db.Where("id = ? OR slug = ?", idOrSlug, idOrSlug).Delete(&models.OperationalPage{})
+		if result.Error != nil {
+			log.Printf("Error deleting operational page: %v", result.Error)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not delete operational page"})
 		}
 
-		rowsAffected, _ := result.RowsAffected()
-		if rowsAffected == 0 {
+		if result.RowsAffected == 0 {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Operational page not found"})
 		}
 
@@ -124,7 +109,7 @@ func DeleteOperationalPage(db *sqlx.DB) fiber.Handler {
 }
 
 // AddComponentToOperationalPage handles adding a component to an operational page
-func AddComponentToOperationalPage(db *sqlx.DB) fiber.Handler {
+func AddComponentToOperationalPage(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		pageID := c.Params("pageID")
 		uuidPageID, err := uuid.Parse(pageID)
@@ -142,10 +127,7 @@ func AddComponentToOperationalPage(db *sqlx.DB) fiber.Handler {
 		component.CreatedAt = time.Now()
 		component.UpdatedAt = time.Now()
 
-		query := `INSERT INTO operational_page_components (id, page_id, component_type, component_id, component_name, display_order, description, created_at, updated_at)
-				  VALUES (:id, :page_id, :component_type, :component_id, :component_name, :display_order, :description, :created_at, :updated_at)`
-
-		_, err = db.NamedExec(query, component)
+		err = db.Create(&component).Error
 		if err != nil {
 			log.Printf("Error adding component to operational page: %v", err)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not add component to operational page"})
@@ -156,7 +138,7 @@ func AddComponentToOperationalPage(db *sqlx.DB) fiber.Handler {
 }
 
 // GetComponentsForOperationalPage handles fetching components for a specific operational page
-func GetComponentsForOperationalPage(db *sqlx.DB) fiber.Handler {
+func GetComponentsForOperationalPage(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		pageID := c.Params("pageID")
 		uuidPageID, err := uuid.Parse(pageID)
@@ -165,7 +147,7 @@ func GetComponentsForOperationalPage(db *sqlx.DB) fiber.Handler {
 		}
 
 		components := []models.OperationalPageComponent{}
-		err = db.Select(&components, `SELECT * FROM operational_page_components WHERE page_id = $1 ORDER BY display_order ASC`, uuidPageID)
+		err = db.Where("page_id = ?", uuidPageID).Order("display_order ASC").Find(&components).Error
 		if err != nil {
 			log.Printf("Error fetching components for operational page: %v", err)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not retrieve components"})
@@ -176,7 +158,7 @@ func GetComponentsForOperationalPage(db *sqlx.DB) fiber.Handler {
 }
 
 // RemoveComponentFromOperationalPage handles removing a component from an operational page
-func RemoveComponentFromOperationalPage(db *sqlx.DB) fiber.Handler {
+func RemoveComponentFromOperationalPage(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		pageID := c.Params("pageID")
 		componentID := c.Params("componentID")
@@ -190,18 +172,17 @@ func RemoveComponentFromOperationalPage(db *sqlx.DB) fiber.Handler {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid component ID"})
 		}
 
-		result, err := db.Exec(`DELETE FROM operational_page_components WHERE page_id = $1 AND id = $2`, uuidPageID, uuidComponentID)
-		if err != nil {
-			log.Printf("Error removing component from operational page: %v", err)
+		// result, err := db.Exec(`DELETE FROM operational_page_components WHERE page_id = $1 AND id = $2`, uuidPageID, uuidComponentID)
+		result := db.Where("page_id = ? AND id = ?", uuidPageID, uuidComponentID).Delete(&models.OperationalPageComponent{})
+		if result.Error != nil {
+			log.Printf("Error removing component from operational page: %v", result.Error)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not remove component"})
 		}
 
-		rowsAffected, _ := result.RowsAffected()
-		if rowsAffected == 0 {
+		if result.RowsAffected == 0 {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Component not found on this page"})
 		}
 
 		return c.Status(fiber.StatusNoContent).SendString("")
 	}
 }
-

@@ -1,4 +1,3 @@
-
 package handlers
 
 import (
@@ -7,13 +6,13 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
-	"github.com/jmoiron/sqlx"
+	"gorm.io/gorm"
 
 	"monitron-server/models"
 )
 
 // CreateLogEntry handles the creation of a new log entry
-func CreateLogEntry(db *sqlx.DB) fiber.Handler {
+func CreateLogEntry(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		logEntry := new(models.LogEntry)
 		if err := c.BodyParser(logEntry); err != nil {
@@ -23,10 +22,8 @@ func CreateLogEntry(db *sqlx.DB) fiber.Handler {
 		logEntry.ID = uuid.New()
 		logEntry.Timestamp = time.Now()
 
-		query := `INSERT INTO log_entries (id, level, message, timestamp, service, request_id)
-				  VALUES (:id, :level, :message, :timestamp, :service, :request_id)`
-
-		_, err := db.NamedExec(query, logEntry)
+		// Insert log entry into the database
+		err := db.Create(logEntry).Error
 		if err != nil {
 			log.Printf("Error inserting log entry: %v", err)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not create log entry"})
@@ -37,7 +34,7 @@ func CreateLogEntry(db *sqlx.DB) fiber.Handler {
 }
 
 // GetLogEntries handles fetching all log entries
-func GetLogEntries(db *sqlx.DB) fiber.Handler {
+func GetLogEntries(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		logEntries := []models.LogEntry{}
 		err := db.Select(&logEntries, `SELECT * FROM log_entries ORDER BY timestamp DESC`)
@@ -51,7 +48,7 @@ func GetLogEntries(db *sqlx.DB) fiber.Handler {
 }
 
 // GetLogEntry handles fetching a single log entry by ID
-func GetLogEntry(db *sqlx.DB) fiber.Handler {
+func GetLogEntry(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		id := c.Params("id")
 		uuidID, err := uuid.Parse(id)
@@ -60,7 +57,7 @@ func GetLogEntry(db *sqlx.DB) fiber.Handler {
 		}
 
 		logEntry := models.LogEntry{}
-		err = db.Get(&logEntry, `SELECT * FROM log_entries WHERE id = $1`, uuidID)
+		err = db.Where("id = ?", uuidID).First(&logEntry).Error
 		if err != nil {
 			log.Printf("Error fetching log entry: %v", err)
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Log entry not found"})
@@ -69,4 +66,3 @@ func GetLogEntry(db *sqlx.DB) fiber.Handler {
 		return c.JSON(logEntry)
 	}
 }
-

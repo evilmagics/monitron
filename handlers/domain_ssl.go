@@ -4,13 +4,15 @@ import (
 	"log"
 	"time"
 
+	"errors"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
-	"errors"
 
 	"monitron-server/models"
 )
+
 // CreateDomainSSL
 // @Summary Create a new domain/SSL entry
 // @Description Create a new domain and SSL certificate monitoring entry
@@ -139,6 +141,7 @@ func UpdateDomainSSL(db *gorm.DB) fiber.Handler {
 		}
 
 		return c.JSON(existingDomainSSL)
+	}
 }
 
 // DeleteDomainSSL
@@ -164,9 +167,7 @@ func DeleteDomainSSL(db *gorm.DB) fiber.Handler {
 		if result := db.Delete(&models.DomainSSL{}, "id = ?", uuidID); result.Error != nil {
 			log.Printf("Error deleting domain/SSL: %v", result.Error)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not delete domain/SSL entry"})
-		}
-
-		if result.RowsAffected == 0 {
+		} else if result.RowsAffected == 0 {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Domain/SSL entry not found"})
 		}
 
@@ -174,16 +175,15 @@ func DeleteDomainSSL(db *gorm.DB) fiber.Handler {
 	}
 }
 
-
 // DomainSSLHealthCheck performs health checks for all domain/SSL entries
 func DomainSSLHealthCheck(db *gorm.DB) {
 	log.Println("Running scheduled domain/SSL health check...")
 	domainSSLs := []models.DomainSSL{}
-	
-		if result := db.Find(&domainSSLs); result.Error != nil {
-			log.Printf("Error fetching domain/SSLs for health check: %v", result.Error)
-			return
-		}
+
+	if result := db.Find(&domainSSLs); result.Error != nil {
+		log.Printf("Error fetching domain/SSLs for health check: %v", result.Error)
+		return
+	}
 
 	for _, domainSSL := range domainSSLs {
 		log.Printf("Checking domain/SSL: %s", domainSSL.Domain)
@@ -193,5 +193,3 @@ func DomainSSLHealthCheck(db *gorm.DB) {
 	}
 	log.Println("Domain/SSL health check completed.")
 }
-
-

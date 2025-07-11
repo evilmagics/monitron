@@ -25,6 +25,10 @@ type DomainSSL struct {
 	DaysLeft          int       `db:"days_left" json:"days_left"` // Calculated, not stored
 }
 
+func (DomainSSL) TableName() string {
+	return "domain_ssl"
+}
+
 // DomainSSLStats represents the monitoring statistics for a domain/SSL
 type DomainSSLStats struct {
 	DomainSSLID         uuid.UUID `db:"domain_ssl_id" json:"domain_ssl_id"`
@@ -34,4 +38,8 @@ type DomainSSLStats struct {
 	AverageResponseTime float64   `db:"average_response_time" json:"average_response_time"`
 	IncidentTotal       int       `db:"incident_total" json:"incident_total"`
 	CreatedAt           time.Time `db:"created_at" json:"created_at"`
+}
+
+func (DomainSSLStats) TableName() string {
+	return "domain_ssl_stats"
 }

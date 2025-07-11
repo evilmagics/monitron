@@ -7,10 +7,10 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
-	"github.com/jmoiron/sqlx"
+	"gorm.io/gorm"
 
-	"monitron-server/models"
 	"monitron-server/messaging"
+	"monitron-server/models"
 )
 
 // CreateReport
@@ -25,7 +25,7 @@ import (
 // @Failure 500 {object} map[string]string "error": "Could not create report"
 // @Security ApiKeyAuth
 // @Router /reports [post]
-func CreateReport(db *sqlx.DB) fiber.Handler {
+func CreateReport(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		report := new(models.Report)
 		if err := c.BodyParser(report); err != nil {
@@ -37,10 +37,7 @@ func CreateReport(db *sqlx.DB) fiber.Handler {
 		report.CreatedAt = time.Now()
 		report.UpdatedAt = time.Now()
 
-		query := `INSERT INTO reports (id, name, report_type, status, generated_at, file_path, created_at, updated_at)
-				  VALUES (:id, :name, :report_type, :status, :generated_at, :file_path, :created_at, :updated_at)`
-
-		_, err := db.NamedExec(query, report)
+		err := db.Create(report).Error
 		if err != nil {
 			log.Printf("Error inserting report: %v", err)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not create report"})
@@ -67,10 +64,10 @@ func CreateReport(db *sqlx.DB) fiber.Handler {
 // @Failure 500 {object} map[string]string "error": "Could not retrieve reports"
 // @Security ApiKeyAuth
 // @Router /reports [get]
-func GetReports(db *sqlx.DB) fiber.Handler {
+func GetReports(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		reports := []models.Report{}
-		err := db.Select(&reports, `SELECT * FROM reports`)
+		err := db.Select(&reports).Error
 		if err != nil {
 			log.Printf("Error fetching reports: %v", err)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not retrieve reports"})
@@ -91,16 +88,16 @@ func GetReports(db *sqlx.DB) fiber.Handler {
 // @Failure 500 {object} map[string]string "error": "Could not retrieve report"
 // @Security ApiKeyAuth
 // @Router /reports/{id} [get]
-func GetReport(db *sqlx.DB) fiber.Handler {
+func GetReport(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		id := c.Params("id")
-		uuidID, err := uuid.Parse(id)
+		_, err := uuid.Parse(id)
 		if err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid report ID"})
 		}
 
 		report := models.Report{}
-		err = db.Get(&report, `SELECT * FROM reports WHERE id = $1`, uuidID)
+		err = db.Where("id = ?", id).First(&report).Error
 		if err != nil {
 			log.Printf("Error fetching report: %v", err)
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Report not found"})
@@ -108,5 +105,3 @@ func GetReport(db *sqlx.DB) fiber.Handler {
 		return c.JSON(report)
 	}
 }
-
-

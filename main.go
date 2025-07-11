@@ -54,9 +54,6 @@ func main() {
 	router.SetupRoutes(app, db)
 	// Initialize and start cron scheduler
 	c := cron.New()
-	c.AddFunc("@every 1m", func() { handlers.ServiceHealthCheck(db) })
-	c.AddFunc("@every 1m", func() { handlers.InstanceHealthCheck(db) })
-	c.AddFunc("@every 1m", func() { handlers.DomainSSLHealthCheck(db) })
 	c.Start()
 	defer c.Stop()
 
@@ -79,5 +76,3 @@ func main() {
 	}
 	log.Println("Server gracefully stopped.")
 }
-
-
