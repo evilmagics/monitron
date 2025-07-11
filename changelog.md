@@ -7,6 +7,7 @@
 
 ### Changed
 - Replaced net/http with Resty for HTTP client operations.
+- Refactored database interactions to use GORM.
 
 ### Fixed
 
