@@ -6,11 +6,15 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
-	"github.com/jmoiron/sqlx"
+	"gorm.io/gorm"
 	"golang.org/x/crypto/bcrypt"
+	"github.com/go-playground/validator/v10"
+	"errors"
 
 	"monitron-server/models"
 )
+
+var validate = validator.New()
 
 // GetUsers
 // @Summary Get all users (Admin Only)
@@ -21,12 +25,11 @@ import (
 // @Failure 500 {object} map[string]string "error": "Could not retrieve users"
 // @Security ApiKeyAuth
 // @Router /users [get]
-func GetUsers(db *sqlx.DB) fiber.Handler {
+func GetUsers(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		users := []models.User{}
-		err := db.Select(&users, `SELECT id, username, email, role, status, last_login, created_at, updated_at FROM users`)
-		if err != nil {
-			log.Printf("Error fetching users: %v", err)
+		if result := db.Select("id", "username", "email", "role", "status", "last_login", "created_at", "updated_at").Find(&users); result.Error != nil {
+			log.Printf("Error fetching users: %v", result.Error)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not retrieve users"})
 		}
 
@@ -46,7 +49,7 @@ func GetUsers(db *sqlx.DB) fiber.Handler {
 // @Failure 500 {object} map[string]string "error": "Could not retrieve user"
 // @Security ApiKeyAuth
 // @Router /users/{id} [get]
-func GetUser(db *sqlx.DB) fiber.Handler {
+func GetUser(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		id := c.Params("id")
 		uuidID, err := uuid.Parse(id)
@@ -55,10 +58,12 @@ func GetUser(db *sqlx.DB) fiber.Handler {
 		}
 
 		user := models.User{}
-		err = db.Get(&user, `SELECT id, username, email, role, status, last_login, created_at, updated_at FROM users WHERE id = $1`, uuidID)
-		if err != nil {
-			log.Printf("Error fetching user: %v", err)
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
+		if result := db.Select("id", "username", "email", "role", "status", "last_login", "created_at", "updated_at").First(&user, "id = ?", uuidID); result.Error != nil {
+			if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
+			}
+			log.Printf("Error fetching user: %v", result.Error)
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not retrieve user"})
 		}
 
 		return c.JSON(user)
@@ -79,7 +84,7 @@ func GetUser(db *sqlx.DB) fiber.Handler {
 // @Failure 500 {object} map[string]string "error": "Could not update user"
 // @Security ApiKeyAuth
 // @Router /users/{id} [put]
-func UpdateUser(db *sqlx.DB) fiber.Handler {
+func UpdateUser(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		id := c.Params("id")
 		uuidID, err := uuid.Parse(id)
@@ -92,25 +97,26 @@ func UpdateUser(db *sqlx.DB) fiber.Handler {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot parse JSON"})
 		}
 
-		user.ID = uuidID
-		user.UpdatedAt = time.Now()
-
-		query := `UPDATE users SET username = :username, email = :email, role = :role, status = :status, updated_at = :updated_at WHERE id = :id`
-
-		result, err := db.NamedExec(query, user)
-		if err != nil {
-			log.Printf("Error updating user: %v", err)
+		var existingUser models.User
+		if result := db.First(&existingUser, "id = ?", uuidID); result.Error != nil {
+			if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
+			}
+			log.Printf("Error finding user for update: %v", result.Error)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not update user"})
 		}
 
-		rowsAffected, _ := result.RowsAffected()
-		if rowsAffected == 0 {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
+		if err := validate.Struct(user); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 		}
 
-		return c.JSON(user)
+		if result := db.Model(&existingUser).Updates(user); result.Error != nil {
+			log.Printf("Error updating user: %v", result.Error)
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not update user"})
+		}
+
+		return c.JSON(existingUser)
 	}
-}
 
 // DeleteUser
 // @Summary Delete a user (Admin Only)
@@ -124,7 +130,7 @@ func UpdateUser(db *sqlx.DB) fiber.Handler {
 // @Failure 500 {object} map[string]string "error": "Could not delete user"
 // @Security ApiKeyAuth
 // @Router /users/{id} [delete]
-func DeleteUser(db *sqlx.DB) fiber.Handler {
+func DeleteUser(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		id := c.Params("id")
 		uuidID, err := uuid.Parse(id)
@@ -132,14 +138,12 @@ func DeleteUser(db *sqlx.DB) fiber.Handler {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid user ID"})
 		}
 
-		result, err := db.Exec(`DELETE FROM users WHERE id = $1`, uuidID)
-		if err != nil {
-			log.Printf("Error deleting user: %v", err)
+		if result := db.Delete(&models.User{}, "id = ?", uuidID); result.Error != nil {
+			log.Printf("Error deleting user: %v", result.Error)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not delete user"})
 		}
 
-		rowsAffected, _ := result.RowsAffected()
-		if rowsAffected == 0 {
+		if result.RowsAffected == 0 {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
 		}
 
@@ -160,7 +164,7 @@ func DeleteUser(db *sqlx.DB) fiber.Handler {
 // @Failure 500 {object} map[string]string "error": "Could not change password"
 // @Security ApiKeyAuth
 // @Router /user/change-password [put]
-func ChangePassword(db *sqlx.DB) fiber.Handler {
+func ChangePassword(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		userID := c.Locals("user_id").(uuid.UUID)
 
@@ -169,13 +173,12 @@ func ChangePassword(db *sqlx.DB) fiber.Handler {
 			NewPassword     string `json:"new_password"`
 		}{}
 
-		if err := c.BodyParser(&passwordChange); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot parse JSON"})
+		if err := validate.Struct(passwordChange); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 		}
 
 		user := models.User{}
-		err := db.Get(&user, `SELECT password FROM users WHERE id = $1`, userID)
-		if err != nil {
+		if result := db.First(&user, "id = ?", userID); result.Error != nil {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "User not found"})
 		}
 
@@ -193,9 +196,10 @@ func ChangePassword(db *sqlx.DB) fiber.Handler {
 		}
 
 		// Update password in DB
-		_, err = db.Exec(`UPDATE users SET password = $1, updated_at = $2 WHERE id = $3`, string(hashedPassword), time.Now(), userID)
-		if err != nil {
-			log.Printf("Error updating password: %v", err)
+		user.Password = string(hashedPassword)
+		user.UpdatedAt = time.Now()
+		if result := db.Save(&user); result.Error != nil {
+			log.Printf("Error updating password: %v", result.Error)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not change password"})
 		}
 
@@ -214,19 +218,18 @@ func ChangePassword(db *sqlx.DB) fiber.Handler {
 // @Failure 400 {object} map[string]string "error": "Cannot parse JSON"
 // @Failure 500 {object} map[string]string "error": "Could not initiate password reset"
 // @Router /password/forgot [post]
-func ForgotPassword(db *sqlx.DB) fiber.Handler {
+func ForgotPassword(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		resetRequest := struct {
 			Email string `json:"email"`
 		}{}
 
-		if err := c.BodyParser(&resetRequest); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot parse JSON"})
+		if err := validate.Struct(resetRequest); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 		}
 
 		user := models.User{}
-		err := db.Get(&user, `SELECT id FROM users WHERE email = $1`, resetRequest.Email)
-		if err != nil {
+		if result := db.First(&user, "email = ?", resetRequest.Email); result.Error != nil {
 			// For security, always return a generic success message even if user not found
 			log.Printf("Forgot password request for non-existent email: %s", resetRequest.Email)
 			return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "If an account with that email exists, a password reset link has been sent."})
@@ -244,12 +247,8 @@ func ForgotPassword(db *sqlx.DB) fiber.Handler {
 			CreatedAt: time.Now(),
 		}
 
-		query := `INSERT INTO password_reset_tokens (id, user_id, token, expires_at, created_at)
-				  VALUES (:id, :user_id, :token, :expires_at, :created_at)`
-
-		_, err = db.NamedExec(query, passwordResetToken)
-		if err != nil {
-			log.Printf("Error saving password reset token: %v", err)
+		if result := db.Create(&passwordResetToken); result.Error != nil {
+			log.Printf("Error saving password reset token: %v", result.Error)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not initiate password reset"})
 		}
 
@@ -271,7 +270,7 @@ func ForgotPassword(db *sqlx.DB) fiber.Handler {
 // @Failure 400 {object} map[string]string "error": "Invalid or expired token" or "Cannot parse JSON"
 // @Failure 500 {object} map[string]string "error": "Could not reset password"
 // @Router /password/reset [post]
-func ResetPassword(db *sqlx.DB) fiber.Handler {
+func ResetPassword(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		resetRequest := struct {
 			Token       string `json:"token"`
@@ -282,9 +281,11 @@ func ResetPassword(db *sqlx.DB) fiber.Handler {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot parse JSON"})
 		}
 
+		if err := validate.Struct(resetRequest); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+		}
 		passwordResetToken := models.PasswordResetToken{}
-		err := db.Get(&passwordResetToken, `SELECT * FROM password_reset_tokens WHERE token = $1 AND expires_at > $2`, resetRequest.Token, time.Now())
-		if err != nil {
+		if result := db.First(&passwordResetToken, "token = ? AND expires_at > ?", resetRequest.Token, time.Now()); result.Error != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid or expired token"})
 		}
 
@@ -296,16 +297,22 @@ func ResetPassword(db *sqlx.DB) fiber.Handler {
 		}
 
 		// Update user\'s password
-		_, err = db.Exec(`UPDATE users SET password = $1, updated_at = $2 WHERE id = $3`, string(hashedPassword), time.Now(), passwordResetToken.UserID)
-		if err != nil {
-			log.Printf("Error updating user password: %v", err)
+		var user models.User
+		if result := db.First(&user, "id = ?", passwordResetToken.UserID); result.Error != nil {
+			log.Printf("Error finding user to reset password: %v", result.Error)
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not reset password"})
+		}
+
+		user.Password = string(hashedPassword)
+		user.UpdatedAt = time.Now()
+		if result := db.Save(&user); result.Error != nil {
+			log.Printf("Error updating user password: %v", result.Error)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not reset password"})
 		}
 
 		// Invalidate the token
-		_, err = db.Exec(`DELETE FROM password_reset_tokens WHERE id = $1`, passwordResetToken.ID)
-		if err != nil {
-			log.Printf("Error deleting password reset token: %v", err)
+		if result := db.Delete(&passwordResetToken); result.Error != nil {
+			log.Printf("Error deleting password reset token: %v", result.Error)
 		}
 
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Password reset successfully"})
