@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 
 	"github.com/gofiber/fiber/v2"
@@ -59,8 +60,8 @@ func main() {
 
 	// Start server in a goroutine
 	go func() {
-		log.Printf("Server is running on port %s", os.Getenv("PORT"))
-		if err := app.Listen(":3000"); err != nil {
+		log.Printf("Server is running on %s:%d", cfg.App.Host, cfg.App.Port)
+		if err := app.Listen(cfg.App.Host + ":" + strconv.Itoa(cfg.App.Port)); err != nil {
 			log.Fatalf("Error starting server: %v", err)
 		}
 	}()

@@ -8,6 +8,10 @@ import (
 )
 
 type Config struct {
+	App struct {
+		Host string
+		Port int
+	}
 	Database struct {
 		Host     string
 		Port     int
@@ -39,6 +43,10 @@ func LoadConfig() *Config {
 	godotenv.Load()
 
 	cfg := &Config{}
+
+	// App config
+	cfg.App.Host = getEnv("APP_HOST", "localhost")
+	cfg.App.Port = getEnvAsInt("APP_PORT", 7770)
 
 	// Database Config
 	cfg.Database.Host = getEnv("DB_HOST", "localhost")
