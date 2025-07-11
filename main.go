@@ -52,7 +52,6 @@ func main() {
 
 	// Setup API routes
 	router.SetupRoutes(app, db)
-
 	// Initialize and start cron scheduler
 	c := cron.New()
 	c.AddFunc("@every 1m", func() { handlers.ServiceHealthCheck(db) })

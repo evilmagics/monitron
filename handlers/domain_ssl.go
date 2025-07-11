@@ -6,11 +6,11 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
-	"github.com/jmoiron/sqlx"
+	"gorm.io/gorm"
+	"errors"
 
 	"monitron-server/models"
 )
-
 // CreateDomainSSL
 // @Summary Create a new domain/SSL entry
 // @Description Create a new domain and SSL certificate monitoring entry
@@ -23,7 +23,7 @@ import (
 // @Failure 500 {object} map[string]string "error": "Could not create domain/SSL entry"
 // @Security ApiKeyAuth
 // @Router /domain-ssl [post]
-func CreateDomainSSL(db *sqlx.DB) fiber.Handler {
+func CreateDomainSSL(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		domainSSL := new(models.DomainSSL)
 		if err := c.BodyParser(domainSSL); err != nil {
@@ -34,14 +34,8 @@ func CreateDomainSSL(db *sqlx.DB) fiber.Handler {
 		domainSSL.CreatedAt = time.Now()
 		domainSSL.UpdatedAt = time.Now()
 
-		query := `INSERT INTO domain_ssl (id, domain, warning_threshold, expiry_threshold, check_interval, label, created_at, updated_at,
-				  certificate_detail, issuer, valid_from, resolved_ip, expiry)
-				  VALUES (:id, :domain, :warning_threshold, :expiry_threshold, :check_interval, :label, :created_at, :updated_at,
-				  :certificate_detail, :issuer, :valid_from, :resolved_ip, :expiry)`
-
-		_, err := db.NamedExec(query, domainSSL)
-		if err != nil {
-			log.Printf("Error inserting domain/SSL: %v", err)
+		if result := db.Create(&domainSSL); result.Error != nil {
+			log.Printf("Error creating domain/SSL entry: %v", result.Error)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not create domain/SSL entry"})
 		}
 
@@ -58,12 +52,11 @@ func CreateDomainSSL(db *sqlx.DB) fiber.Handler {
 // @Failure 500 {object} map[string]string "error": "Could not retrieve domain/SSL entries"
 // @Security ApiKeyAuth
 // @Router /domain-ssl [get]
-func GetDomainSSLs(db *sqlx.DB) fiber.Handler {
+func GetDomainSSLs(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		domainSSLs := []models.DomainSSL{}
-		err := db.Select(&domainSSLs, `SELECT * FROM domain_ssl`)
-		if err != nil {
-			log.Printf("Error fetching domain/SSLs: %v", err)
+		if result := db.Find(&domainSSLs); result.Error != nil {
+			log.Printf("Error fetching domain/SSLs: %v", result.Error)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not retrieve domain/SSL entries"})
 		}
 
@@ -83,7 +76,7 @@ func GetDomainSSLs(db *sqlx.DB) fiber.Handler {
 // @Failure 500 {object} map[string]string "error": "Could not retrieve domain/SSL entry"
 // @Security ApiKeyAuth
 // @Router /domain-ssl/{id} [get]
-func GetDomainSSL(db *sqlx.DB) fiber.Handler {
+func GetDomainSSL(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		id := c.Params("id")
 		uuidID, err := uuid.Parse(id)
@@ -92,10 +85,12 @@ func GetDomainSSL(db *sqlx.DB) fiber.Handler {
 		}
 
 		domainSSL := models.DomainSSL{}
-		err = db.Get(&domainSSL, `SELECT * FROM domain_ssl WHERE id = $1`, uuidID)
-		if err != nil {
-			log.Printf("Error fetching domain/SSL: %v", err)
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Domain/SSL entry not found"})
+		if result := db.First(&domainSSL, "id = ?", uuidID); result.Error != nil {
+			if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Domain/SSL entry not found"})
+			}
+			log.Printf("Error fetching domain/SSL: %v", result.Error)
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not retrieve domain/SSL entry"})
 		}
 
 		return c.JSON(domainSSL)
@@ -116,7 +111,7 @@ func GetDomainSSL(db *sqlx.DB) fiber.Handler {
 // @Failure 500 {object} map[string]string "error": "Could not update domain/SSL entry"
 // @Security ApiKeyAuth
 // @Router /domain-ssl/{id} [put]
-func UpdateDomainSSL(db *sqlx.DB) fiber.Handler {
+func UpdateDomainSSL(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		id := c.Params("id")
 		uuidID, err := uuid.Parse(id)
@@ -129,27 +124,21 @@ func UpdateDomainSSL(db *sqlx.DB) fiber.Handler {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot parse JSON"})
 		}
 
-		domainSSL.ID = uuidID
-		domainSSL.UpdatedAt = time.Now()
-
-		query := `UPDATE domain_ssl SET domain = :domain, warning_threshold = :warning_threshold, expiry_threshold = :expiry_threshold,
-				  check_interval = :check_interval, label = :label, updated_at = :updated_at,
-				  certificate_detail = :certificate_detail, issuer = :issuer, valid_from = :valid_from, resolved_ip = :resolved_ip, expiry = :expiry
-				  WHERE id = :id`
-
-		result, err := db.NamedExec(query, domainSSL)
-		if err != nil {
-			log.Printf("Error updating domain/SSL: %v", err)
+		var existingDomainSSL models.DomainSSL
+		if result := db.First(&existingDomainSSL, "id = ?", uuidID); result.Error != nil {
+			if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Domain/SSL entry not found"})
+			}
+			log.Printf("Error finding domain/SSL for update: %v", result.Error)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not update domain/SSL entry"})
 		}
 
-		rowsAffected, _ := result.RowsAffected()
-		if rowsAffected == 0 {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Domain/SSL entry not found"})
+		if result := db.Model(&existingDomainSSL).Updates(domainSSL); result.Error != nil {
+			log.Printf("Error updating domain/SSL: %v", result.Error)
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not update domain/SSL entry"})
 		}
 
-		return c.JSON(domainSSL)
-	}
+		return c.JSON(existingDomainSSL)
 }
 
 // DeleteDomainSSL
@@ -164,7 +153,7 @@ func UpdateDomainSSL(db *sqlx.DB) fiber.Handler {
 // @Failure 500 {object} map[string]string "error": "Could not delete domain/SSL entry"
 // @Security ApiKeyAuth
 // @Router /domain-ssl/{id} [delete]
-func DeleteDomainSSL(db *sqlx.DB) fiber.Handler {
+func DeleteDomainSSL(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		id := c.Params("id")
 		uuidID, err := uuid.Parse(id)
@@ -172,14 +161,12 @@ func DeleteDomainSSL(db *sqlx.DB) fiber.Handler {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid domain/SSL ID"})
 		}
 
-		result, err := db.Exec(`DELETE FROM domain_ssl WHERE id = $1`, uuidID)
-		if err != nil {
-			log.Printf("Error deleting domain/SSL: %v", err)
+		if result := db.Delete(&models.DomainSSL{}, "id = ?", uuidID); result.Error != nil {
+			log.Printf("Error deleting domain/SSL: %v", result.Error)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not delete domain/SSL entry"})
 		}
 
-		rowsAffected, _ := result.RowsAffected()
-		if rowsAffected == 0 {
+		if result.RowsAffected == 0 {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Domain/SSL entry not found"})
 		}
 
@@ -189,15 +176,14 @@ func DeleteDomainSSL(db *sqlx.DB) fiber.Handler {
 
 
 // DomainSSLHealthCheck performs health checks for all domain/SSL entries
-func DomainSSLHealthCheck(db *sqlx.DB) {
+func DomainSSLHealthCheck(db *gorm.DB) {
 	log.Println("Running scheduled domain/SSL health check...")
 	domainSSLs := []models.DomainSSL{}
 	
-	err := db.Select(&domainSSLs, `SELECT * FROM domain_ssl`)
-	if err != nil {
-		log.Printf("Error fetching domain/SSLs for health check: %v", err)
-		return
-	}
+		if result := db.Find(&domainSSLs); result.Error != nil {
+			log.Printf("Error fetching domain/SSLs for health check: %v", result.Error)
+			return
+		}
 
 	for _, domainSSL := range domainSSLs {
 		log.Printf("Checking domain/SSL: %s", domainSSL.Domain)

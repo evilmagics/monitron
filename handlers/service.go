@@ -6,11 +6,10 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
-	"github.com/jmoiron/sqlx"
+	"gorm.io/gorm"
 
 	"monitron-server/models"
 )
-
 // CreateService
 // @Summary Create a new service
 // @Description Create a new monitoring service
@@ -23,7 +22,7 @@ import (
 // @Failure 500 {object} map[string]string "error": "Could not create service"
 // @Security ApiKeyAuth
 // @Router /services [post]
-func CreateService(db *sqlx.DB) fiber.Handler {
+func CreateService(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		service := new(models.Service)
 		if err := c.BodyParser(service); err != nil {
@@ -34,24 +33,8 @@ func CreateService(db *sqlx.DB) fiber.Handler {
 		service.CreatedAt = time.Now()
 		service.UpdatedAt = time.Now()
 
-		query := `INSERT INTO services (id, name, api_type, check_interval, timeout, description, label, "group", created_at, updated_at,
-				  http_method, http_health_url, http_expected_status,
-				  grpc_host, grpc_port, grpc_auth, grpc_proto,
-				  mqtt_host, mqtt_port, mqtt_qos, mqtt_topic, mqtt_auth,
-				  tcp_host, tcp_port,
-				  dns_domain_name,
-				  ping_host)
-				  VALUES (:id, :name, :api_type, :check_interval, :timeout, :description, :label, :group, :created_at, :updated_at,
-				  :http_method, :http_health_url, :http_expected_status,
-				  :grpc_host, :grpc_port, :grpc_auth, :grpc_proto,
-				  :mqtt_host, :mqtt_port, :mqtt_qos, :mqtt_topic, :mqtt_auth,
-				  :tcp_host, :tcp_port,
-				  :dns_domain_name,
-				  :ping_host)`
-
-		_, err := db.NamedExec(query, service)
-		if err != nil {
-			log.Printf("Error inserting service: %v", err)
+		if result := db.Create(&service); result.Error != nil {
+			log.Printf("Error creating service: %v", result.Error)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not create service"})
 		}
 
@@ -68,12 +51,11 @@ func CreateService(db *sqlx.DB) fiber.Handler {
 // @Failure 500 {object} map[string]string "error": "Could not retrieve services"
 // @Security ApiKeyAuth
 // @Router /services [get]
-func GetServices(db *sqlx.DB) fiber.Handler {
+func GetServices(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		services := []models.Service{}
-		err := db.Select(&services, `SELECT * FROM services`)
-		if err != nil {
-			log.Printf("Error fetching services: %v", err)
+		if result := db.Find(&services); result.Error != nil {
+			log.Printf("Error fetching services: %v", result.Error)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not retrieve services"})
 		}
 
@@ -93,7 +75,7 @@ func GetServices(db *sqlx.DB) fiber.Handler {
 // @Failure 500 {object} map[string]string "error": "Could not retrieve service"
 // @Security ApiKeyAuth
 // @Router /services/{id} [get]
-func GetService(db *sqlx.DB) fiber.Handler {
+func GetService(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		id := c.Params("id")
 		uuidID, err := uuid.Parse(id)
@@ -102,10 +84,12 @@ func GetService(db *sqlx.DB) fiber.Handler {
 		}
 
 		service := models.Service{}
-		err = db.Get(&service, `SELECT * FROM services WHERE id = $1`, uuidID)
-		if err != nil {
-			log.Printf("Error fetching service: %v", err)
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Service not found"})
+		if result := db.First(&service, "id = ?", uuidID); result.Error != nil {
+			if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Service not found"})
+			}
+			log.Printf("Error fetching service: %v", result.Error)
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not retrieve service"})
 		}
 
 		return c.JSON(service)
@@ -126,7 +110,7 @@ func GetService(db *sqlx.DB) fiber.Handler {
 // @Failure 500 {object} map[string]string "error": "Could not update service"
 // @Security ApiKeyAuth
 // @Router /services/{id} [put]
-func UpdateService(db *sqlx.DB) fiber.Handler {
+func UpdateService(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		id := c.Params("id")
 		uuidID, err := uuid.Parse(id)
@@ -139,32 +123,21 @@ func UpdateService(db *sqlx.DB) fiber.Handler {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot parse JSON"})
 		}
 
-		service.ID = uuidID
-		service.UpdatedAt = time.Now()
-
-		query := `UPDATE services SET name = :name, api_type = :api_type, check_interval = :check_interval, timeout = :timeout,
-				  description = :description, label = :label, "group" = :group, updated_at = :updated_at,
-				  http_method = :http_method, http_health_url = :http_health_url, http_expected_status = :http_expected_status,
-				  grpc_host = :grpc_host, grpc_port = :grpc_port, grpc_auth = :grpc_auth, grpc_proto = :grpc_proto,
-				  mqtt_host = :mqtt_host, mqtt_port = :mqtt_port, mqtt_qos = :mqtt_qos, mqtt_topic = :mqtt_topic, mqtt_auth = :mqtt_auth,
-				  tcp_host = :tcp_host, tcp_port = :tcp_port,
-				  dns_domain_name = :dns_domain_name,
-				  ping_host = :ping_host
-				  WHERE id = :id`
-
-		result, err := db.NamedExec(query, service)
-		if err != nil {
-			log.Printf("Error updating service: %v", err)
+		var existingService models.Service
+		if result := db.First(&existingService, "id = ?", uuidID); result.Error != nil {
+			if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Service not found"})
+			}
+			log.Printf("Error finding service for update: %v", result.Error)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not update service"})
 		}
 
-		rowsAffected, _ := result.RowsAffected()
-		if rowsAffected == 0 {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Service not found"})
+		if result := db.Model(&existingService).Updates(service); result.Error != nil {
+			log.Printf("Error updating service: %v", result.Error)
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not update service"})
 		}
 
-		return c.JSON(service)
-	}
+		return c.JSON(existingService)
 }
 
 // DeleteService
@@ -179,7 +152,7 @@ func UpdateService(db *sqlx.DB) fiber.Handler {
 // @Failure 500 {object} map[string]string "error": "Could not delete service"
 // @Security ApiKeyAuth
 // @Router /services/{id} [delete]
-func DeleteService(db *sqlx.DB) fiber.Handler {
+func DeleteService(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		id := c.Params("id")
 		uuidID, err := uuid.Parse(id)
@@ -187,14 +160,12 @@ func DeleteService(db *sqlx.DB) fiber.Handler {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid service ID"})
 		}
 
-		result, err := db.Exec(`DELETE FROM services WHERE id = $1`, uuidID)
-		if err != nil {
-			log.Printf("Error deleting service: %v", err)
+		if result := db.Delete(&models.Service{}, "id = ?", uuidID); result.Error != nil {
+			log.Printf("Error deleting service: %v", result.Error)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not delete service"})
 		}
 
-		rowsAffected, _ := result.RowsAffected()
-		if rowsAffected == 0 {
+		if result.RowsAffected == 0 {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Service not found"})
 		}
 
@@ -205,15 +176,14 @@ func DeleteService(db *sqlx.DB) fiber.Handler {
 
 
 // ServiceHealthCheck performs health checks for all services
-func ServiceHealthCheck(db *sqlx.DB) {
+func ServiceHealthCheck(db *gorm.DB) {
 	log.Println("Running scheduled service health check...")
 	services := []models.Service{}
 	
-	err := db.Select(&services, `SELECT * FROM services`)
-	if err != nil {
-		log.Printf("Error fetching services for health check: %v", err)
-		return
-	}
+		if result := db.Find(&services); result.Error != nil {
+			log.Printf("Error fetching services for health check: %v", result.Error)
+			return
+		}
 
 	for _, service := range services {
 		log.Printf("Checking service: %s (Type: %s)", service.Name, service.APIType)

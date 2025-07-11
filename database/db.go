@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/jmoiron/sqlx"
-	_ "github.com/lib/pq"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 
 	"monitron-server/config"
 
@@ -14,26 +14,27 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 )
 
-func InitDB(cfg *config.Config) *sqlx.DB {
+func InitDB(cfg *config.Config) *gorm.DB {
 	dbURI := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
 		cfg.Database.Host, cfg.Database.Port, cfg.Database.User, cfg.Database.Password, cfg.Database.DBName, cfg.Database.SSLMode)
 
 	var err error
-	db, err := sqlx.Connect("postgres", dbURI)
+	db, err := gorm.Open(postgres.Open(dbURI), &gorm.Config{})
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
 
-	if err = db.Ping(); err != nil {
-		log.Fatalf("Failed to ping database: %v", err)
-	}
-
 	log.Println("Successfully connected to database!")
 
-	// Run migrations
+	// Run migrations using the sqlx driver for golang-migrate
+	sqlDB, err := db.DB()
+	if err != nil {
+		log.Fatalf("Failed to get *sql.DB from GORM: %v", err)
+	}
+
 	m, err := migrate.New(
 		"file://database/migrations",
-		dbURI,
+		fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s", cfg.Database.User, cfg.Database.Password, cfg.Database.Host, cfg.Database.Port, cfg.Database.DBName, cfg.Database.SSLMode),
 	)
 	if err != nil {
 		log.Fatalf("Failed to create migrate instance: %v", err)
@@ -47,9 +48,14 @@ func InitDB(cfg *config.Config) *sqlx.DB {
 	return db
 }
 
-func CloseDB(db *sqlx.DB) {
+func CloseDB(db *gorm.DB) {
 	if db != nil {
-		db.Close()
+		sqlDB, err := db.DB()
+		if err != nil {
+			log.Printf("Error getting *sql.DB from GORM for closing: %v", err)
+			return
+		}
+		sqlDB.Close()
 		log.Println("Database connection closed.")
 	}
 }

@@ -2,13 +2,13 @@ package router
 
 import (
 	"github.com/gofiber/fiber/v2"
-	"github.com/jmoiron/sqlx"
+	"gorm.io/gorm"
 
 	"monitron-server/handlers"
 	"monitron-server/middleware"
 )
 
-func SetupRoutes(app *fiber.App, db *sqlx.DB) {
+func SetupRoutes(app *fiber.App, db *gorm.DB) {
 	api := app.Group("/api/v1")
 
 	// Instance Management Routes
