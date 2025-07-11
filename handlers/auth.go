@@ -6,12 +6,15 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
-	"github.com/jmoiron/sqlx"
+	"gorm.io/gorm"
 	"golang.org/x/crypto/bcrypt"
+	"github.com/go-playground/validator/v10"
 
 	"monitron-server/models"
 	"monitron-server/utils"
 )
+
+var validate = validator.New()
 
 // RegisterUser
 // @Summary Register a new user
@@ -24,13 +27,16 @@ import (
 // @Failure 400 {object} map[string]string "error": "Cannot parse JSON"
 // @Failure 500 {object} map[string]string "error": "Could not register user"
 // @Router /auth/register [post]
-func RegisterUser(db *sqlx.DB) fiber.Handler {
+func RegisterUser(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		user := new(models.User)
 		if err := c.BodyParser(user); err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot parse JSON"})
 		}
 
+		if err := validate.Struct(user); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+		}
 		// Hash password
 		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
 		if err != nil {
@@ -45,12 +51,8 @@ func RegisterUser(db *sqlx.DB) fiber.Handler {
 		user.CreatedAt = time.Now()
 		user.UpdatedAt = time.Now()
 
-		query := `INSERT INTO users (id, username, email, password, role, status, created_at, updated_at)
-				  VALUES (:id, :username, :email, :password, :role, :status, :created_at, :updated_at)`
-
-		_, err = db.NamedExec(query, user)
-		if err != nil {
-			log.Printf("Error inserting user: %v", err)
+		if result := db.Create(&user); result.Error != nil {
+			log.Printf("Error inserting user: %v", result.Error)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not register user"})
 		}
 
@@ -72,7 +74,7 @@ func RegisterUser(db *sqlx.DB) fiber.Handler {
 // @Failure 401 {object} map[string]string "error": "Invalid credentials"
 // @Failure 500 {object} map[string]string "error": "Could not generate token"
 // @Router /auth/login [post]
-func LoginUser(db *sqlx.DB) fiber.Handler {
+func LoginUser(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		loginRequest := struct {
 			Email    string `json:"email"`
@@ -83,9 +85,11 @@ func LoginUser(db *sqlx.DB) fiber.Handler {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot parse JSON"})
 		}
 
+		if err := validate.Struct(loginRequest); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+		}
 		user := models.User{}
-		err := db.Get(&user, `SELECT * FROM users WHERE email = $1`, loginRequest.Email)
-		if err != nil {
+		if result := db.First(&user, "email = ?", loginRequest.Email); result.Error != nil {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid credentials"})
 		}
 
@@ -98,9 +102,8 @@ func LoginUser(db *sqlx.DB) fiber.Handler {
 		// Update last login time
 		now := time.Now()
 		user.LastLogin = &now
-		_, err = db.Exec(`UPDATE users SET last_login = $1 WHERE id = $2`, user.LastLogin, user.ID)
-		if err != nil {
-			log.Printf("Error updating last login: %v", err)
+		if result := db.Save(&user); result.Error != nil {
+			log.Printf("Error updating last login: %v", result.Error)
 		}
 
 		token, err := utils.GenerateJWT(user.ID, user.Role)

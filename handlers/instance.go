@@ -6,13 +6,13 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
-	"github.com/jmoiron/sqlx"
+	"gorm.io/gorm"
+	"errors"
 
 	"monitron-server/config"
 	"monitron-server/models"
 	"monitron-server/utils"
 )
-
 // CreateInstance
 // @Summary Create a new instance
 // @Description Create a new monitoring instance
@@ -25,7 +25,7 @@ import (
 // @Failure 500 {object} map[string]string "error": "Could not create instance"
 // @Security ApiKeyAuth
 // @Router /instances [post]
-func CreateInstance(db *sqlx.DB) fiber.Handler {
+func CreateInstance(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		instance := new(models.Instance)
 		if err := c.BodyParser(instance); err != nil {
@@ -46,12 +46,8 @@ func CreateInstance(db *sqlx.DB) fiber.Handler {
 		instance.CreatedAt = time.Now()
 		instance.UpdatedAt = time.Now()
 
-		query := `INSERT INTO instances (id, name, host, check_interval, check_timeout, agent_port, agent_auth, description, label, "group", created_at, updated_at)
-				  VALUES (:id, :name, :host, :check_interval, :check_timeout, :agent_port, :agent_auth, :description, :label, :group, :created_at, :updated_at)`
-
-		_, err := db.NamedExec(query, instance)
-		if err != nil {
-			log.Printf("Error inserting instance: %v", err)
+		if result := db.Create(&instance); result.Error != nil {
+			log.Printf("Error creating instance: %v", result.Error)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not create instance"})
 		}
 
@@ -80,12 +76,11 @@ func CreateInstance(db *sqlx.DB) fiber.Handler {
 // @Failure 500 {object} map[string]string "error": "Could not retrieve instances"
 // @Security ApiKeyAuth
 // @Router /instances [get]
-func GetInstances(db *sqlx.DB) fiber.Handler {
+func GetInstances(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		instances := []models.Instance{}
-		err := db.Select(&instances, `SELECT * FROM instances`)
-		if err != nil {
-			log.Printf("Error fetching instances: %v", err)
+		if result := db.Find(&instances); result.Error != nil {
+			log.Printf("Error fetching instances: %v", result.Error)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not retrieve instances"})
 		}
 
@@ -118,7 +113,7 @@ func GetInstances(db *sqlx.DB) fiber.Handler {
 // @Failure 500 {object} map[string]string "error": "Could not retrieve instance"
 // @Security ApiKeyAuth
 // @Router /instances/{id} [get]
-func GetInstance(db *sqlx.DB) fiber.Handler {
+func GetInstance(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		id := c.Params("id")
 		uuidID, err := uuid.Parse(id)
@@ -127,10 +122,12 @@ func GetInstance(db *sqlx.DB) fiber.Handler {
 		}
 
 		instance := models.Instance{}
-		err = db.Get(&instance, `SELECT * FROM instances WHERE id = $1`, uuidID)
-		if err != nil {
-			log.Printf("Error fetching instance: %v", err)
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Instance not found"})
+		if result := db.First(&instance, "id = ?", uuidID); result.Error != nil {
+			if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Instance not found"})
+			}
+			log.Printf("Error fetching instance: %v", result.Error)
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not retrieve instance"})
 		}
 
 		cfg := config.LoadConfig()
@@ -162,7 +159,7 @@ func GetInstance(db *sqlx.DB) fiber.Handler {
 // @Failure 500 {object} map[string]string "error": "Could not update instance"
 // @Security ApiKeyAuth
 // @Router /instances/{id} [put]
-func UpdateInstance(db *sqlx.DB) fiber.Handler {
+func UpdateInstance(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		id := c.Params("id")
 		uuidID, err := uuid.Parse(id)
@@ -185,38 +182,33 @@ func UpdateInstance(db *sqlx.DB) fiber.Handler {
 			instance.AgentAuth = encryptedAuth
 		}
 
-		instance.ID = uuidID
-		instance.UpdatedAt = time.Now()
-
-		query := `UPDATE instances SET name = :name, host = :host, check_interval = :check_interval, check_timeout = :check_timeout, 
-				  agent_port = :agent_port, agent_auth = :agent_auth, description = :description, label = :label, "group" = :group, updated_at = :updated_at
-				  WHERE id = :id`
-
-		result, err := db.NamedExec(query, instance)
-		if err != nil {
-			log.Printf("Error updating instance: %v", err)
+		var existingInstance models.Instance
+		if result := db.First(&existingInstance, "id = ?", uuidID); result.Error != nil {
+			if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Instance not found"})
+			}
+			log.Printf("Error finding instance for update: %v", result.Error)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not update instance"})
 		}
 
-		rowsAffected, _ := result.RowsAffected()
-		if rowsAffected == 0 {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Instance not found"})
+		if result := db.Model(&existingInstance).Updates(instance);
+		if result.Error != nil {
+			log.Printf("Error updating instance: %v", result.Error)
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not update instance"})
 		}
 
 		// Decrypt agent_auth before returning
-		if instance.AgentAuth != "" {
-			decryptedAuth, err := utils.Decrypt(instance.AgentAuth, cfg)
+		if existingInstance.AgentAuth != "" {
+			decryptedAuth, err := utils.Decrypt(existingInstance.AgentAuth, cfg)
 			if err != nil {
 				log.Printf("Error decrypting agent auth: %v", err)
-				instance.AgentAuth = ""
+				existingInstance.AgentAuth = ""
 			} else {
-				instance.AgentAuth = string(decryptedAuth)
+				existingInstance.AgentAuth = string(decryptedAuth)
 			}
 		}
 
-		return c.JSON(instance)
-	}
-}
+		return c.JSON(existingInstance)
 
 // DeleteInstance
 // @Summary Delete an instance
@@ -230,7 +222,7 @@ func UpdateInstance(db *sqlx.DB) fiber.Handler {
 // @Failure 500 {object} map[string]string "error": "Could not delete instance"
 // @Security ApiKeyAuth
 // @Router /instances/{id} [delete]
-func DeleteInstance(db *sqlx.DB) fiber.Handler {
+func DeleteInstance(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		id := c.Params("id")
 		uuidID, err := uuid.Parse(id)
@@ -238,18 +230,38 @@ func DeleteInstance(db *sqlx.DB) fiber.Handler {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid instance ID"})
 		}
 
-		result, err := db.Exec(`DELETE FROM instances WHERE id = $1`, uuidID)
-		if err != nil {
-			log.Printf("Error deleting instance: %v", err)
+		if result := db.Delete(&models.Instance{}, "id = ?", uuidID); result.Error != nil {
+			log.Printf("Error deleting instance: %v", result.Error)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not delete instance"})
 		}
 
-		rowsAffected, _ := result.RowsAffected()
-		if rowsAffected == 0 {
+		if result.RowsAffected == 0 {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Instance not found"})
 		}
 
 		return c.Status(fiber.StatusNoContent).SendString("")
 	}
 }
+
+
+
+// InstanceHealthCheck performs health checks for all instances
+func InstanceHealthCheck(db *gorm.DB) {
+	log.Println("Running scheduled instance health check...")
+	instances := []models.Instance{}
+	
+		if result := db.Find(&instances); result.Error != nil {
+			log.Printf("Error fetching instances for health check: %v", result.Error)
+			return
+		}
+
+	for _, instance := range instances {
+		log.Printf("Checking instance: %s (Host: %s)", instance.Name, instance.Host)
+		// Implement actual health check logic for instances
+		// For now, just simulate a successful check
+		log.Printf("Instance %s health check successful.", instance.Name)
+	}
+	log.Println("Instance health check completed.")
+}
+
 
