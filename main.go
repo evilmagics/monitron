@@ -2,121 +2,82 @@ package main
 
 import (
 	"log"
-	"monitoring-backend/config"
-	"monitoring-backend/handlers"
-	"monitoring-backend/middleware"
-	"monitoring-backend/models"
-	"monitoring-backend/services"
+	"os"
+	"os/signal"
+	"syscall"
 
-	"github.com/gin-contrib/cors"
-	"github.com/gin-gonic/gin"
+	"github.com/gofiber/fiber/v2"
+	"github.com/robfig/cron/v3"
+
+	"monitron-server/config"
+	"monitron-server/database"
+	"monitron-server/messaging"
+	"monitron-server/router"
 )
 
+// @title Monitron API
+// @version 1.0
+// @description This is the API documentation for the Monitron application.
+// @termsOfService http://swagger.io/terms/
+
+// @contact.name API Support
+// @contact.url http://www.swagger.io/support
+// @contact.email support@swagger.io
+
+// @license.name Apache 2.0
+// @license.url http://www.apache.org/licenses/LICENSE-2.0.html
+
+// @host localhost:3000
+// @BasePath /api/v1
+
+// @securityDefinitions.apikey ApiKeyAuth
+// @in header
+// @name Authorization
+
 func main() {
-	// Load configuration
-	cfg := config.Load()
+	cfg := config.LoadConfig()
 
 	// Initialize database
-	db, err := models.InitDB(cfg.GenerateDatabaseURL())
-	if err != nil {
-		log.Fatal("Failed to connect to database:", err)
-	}
+	db := database.InitDB(cfg)
+	defer database.CloseDB(db)
 
-	// Run migrations
-	if err := models.Migrate(db); err != nil {
-		log.Fatal("Failed to run migrations:", err)
-	}
+	// Initialize RabbitMQ
+	messaging.InitRabbitMQ(cfg)
+	defer messaging.CloseRabbitMQ()
 
-	// Initialize services
-	instanceService := services.NewInstanceService(db)
-	serviceService := services.NewServiceService(db)
-	dnsService := services.NewDNSService(db)
-	notificationService := services.NewNotificationService(db)
-	monitoringService := services.NewMonitoringService(db, serviceService, dnsService, notificationService)
+	// Setup and start RabbitMQ consumers in a goroutine
+	go messaging.SetupConsumers()
 
-	// Start monitoring scheduler
-	go monitoringService.StartScheduler()
+	app := fiber.New()
 
-	// Set database for auth handlers
-	handlers.SetDB(db)
+	// Setup API routes
+	router.SetupRoutes(app, db)
 
-	// Initialize handlers
-	instanceHandler := handlers.NewInstanceHandler(instanceService)
-	serviceHandler := handlers.NewServiceHandler(serviceService)
-	dnsHandler := handlers.NewDNSHandler(dnsService)
-	metricsHandler := handlers.NewMetricsHandler(instanceService)
-	dashboardHandler := handlers.NewDashboardHandler(instanceService, serviceService, dnsService)
+	// Initialize and start cron scheduler
+	c := cron.New()
+	// Example: Schedule a report generation every minute
+	// c.AddFunc("@every 1m", func() { log.Println("Running scheduled report generation") })
+	c.Start()
+	defer c.Stop()
 
-	// Setup router
-	r := gin.Default()
-
-	// CORS middleware
-	r.Use(cors.New(cors.Config{
-		AllowAllOrigins:  true,
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"*"},
-		ExposeHeaders:    []string{"Content-Length"},
-		AllowCredentials: true,
-	}))
-
-	// Auth middleware for protected routes
-	authMiddleware := middleware.AuthMiddleware()
-
-	// Public routes
-	api := r.Group("/api/v1")
-	{
-		// Metrics endpoint for instances to send data
-		api.POST("/metrics", metricsHandler.ReceiveMetrics)
-
-		// Auth routes
-		api.POST("/auth/login", handlers.Login)
-		api.POST("/auth/register", handlers.Register)
-	}
-
-	// Protected routes
-	protected := api.Group("/")
-	protected.Use(authMiddleware)
-	{
-		// Dashboard
-		protected.GET("/dashboard", dashboardHandler.GetDashboard)
-
-		// Instances
-		instances := protected.Group("/instances")
-		{
-			instances.GET("", instanceHandler.GetInstances)
-			instances.POST("", instanceHandler.CreateInstance)
-			instances.GET("/:id", instanceHandler.GetInstance)
-			instances.PUT("/:id", instanceHandler.UpdateInstance)
-			instances.DELETE("/:id", instanceHandler.DeleteInstance)
-			instances.GET("/:id/metrics", instanceHandler.GetInstanceMetrics)
+	// Start server in a goroutine
+	go func() {
+		log.Printf("Server is running on port %s", os.Getenv("PORT"))
+		if err := app.Listen(":3000"); err != nil {
+			log.Fatalf("Error starting server: %v", err)
 		}
+	}()
 
-		// Services
-		services := protected.Group("/services")
-		{
-			services.GET("", serviceHandler.GetServices)
-			services.POST("", serviceHandler.CreateService)
-			services.GET("/:id", serviceHandler.GetService)
-			services.PUT("/:id", serviceHandler.UpdateService)
-			services.DELETE("/:id", serviceHandler.DeleteService)
-			services.GET("/:id/checks", serviceHandler.GetServiceChecks)
-		}
+	// Wait for graceful shutdown
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
 
-		// DNS
-		dns := protected.Group("/dns")
-		{
-			dns.GET("", dnsHandler.GetDNSRecords)
-			dns.POST("", dnsHandler.CreateDNSRecord)
-			dns.GET("/:id", dnsHandler.GetDNSRecord)
-			dns.PUT("/:id", dnsHandler.UpdateDNSRecord)
-			dns.DELETE("/:id", dnsHandler.DeleteDNSRecord)
-			dns.GET("/:id/checks", dnsHandler.GetDNSChecks)
-		}
+	log.Println("Shutting down server...")
+	if err := app.Shutdown(); err != nil {
+		log.Fatalf("Error shutting down server: %v", err)
 	}
-
-	// Start server
-	log.Printf("Server starting on port %s", cfg.Port)
-	if err := r.Run("0.0.0.0:" + cfg.Port); err != nil {
-		log.Fatal("Failed to start server:", err)
-	}
+	log.Println("Server gracefully stopped.")
 }
+
+

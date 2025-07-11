@@ -3,97 +3,58 @@ package models
 import (
 	"time"
 
-	"gorm.io/gorm"
-)
-
-type ServiceType string
-
-const (
-	ServiceTypeHTTP ServiceType = "http"
-	ServiceTypeGRPC ServiceType = "grpc"
-	ServiceTypeTCP  ServiceType = "tcp"
-	ServiceTypeMQTT ServiceType = "mqtt"
+	"github.com/google/uuid"
 )
 
 type Service struct {
-	ID              uint           `json:"id" gorm:"primaryKey"`
-	Name            string         `json:"name" gorm:"not null"`
-	Type            ServiceType    `json:"type" gorm:"not null"`
-	Host            string         `json:"host" gorm:"not null"`
-	Port            int            `json:"port"`
-	IntervalSeconds int            `json:"interval_seconds" gorm:"default:60"`
-	Description     string         `json:"description"`
-	CreatedAt       time.Time      `json:"created_at"`
-	UpdatedAt       time.Time      `json:"updated_at"`
-	DeletedAt       gorm.DeletedAt `json:"-" gorm:"index"`
-	
-	// Relationships
-	HTTPConfig *ServiceHTTPConfig `json:"http_config,omitempty" gorm:"foreignKey:ServiceID"`
-	GRPCConfig *ServiceGRPCConfig `json:"grpc_config,omitempty" gorm:"foreignKey:ServiceID"`
-	TCPConfig  *ServiceTCPConfig  `json:"tcp_config,omitempty" gorm:"foreignKey:ServiceID"`
-	MQTTConfig *ServiceMQTTConfig `json:"mqtt_config,omitempty" gorm:"foreignKey:ServiceID"`
-	Checks     []ServiceCheck     `json:"checks,omitempty" gorm:"foreignKey:ServiceID"`
+	ID            uuid.UUID `db:"id" json:"id"`
+	Name          string    `db:"name" json:"name"`
+	APIType       string    `db:"api_type" json:"api_type"` // HTTP API, gRPC, MQTT, TCP, DNS, Ping
+	CheckInterval int       `db:"check_interval" json:"check_interval"` // in seconds
+	Timeout       int       `db:"timeout" json:"timeout"`       // in seconds
+	Description   string    `db:"description" json:"description"`
+	Label         string    `db:"label" json:"label"`
+	Group         string    `db:"group" json:"group"`
+	CreatedAt     time.Time `db:"created_at" json:"created_at"`
+	UpdatedAt     time.Time `db:"updated_at" json:"updated_at"`
+
+	// Specific fields for HTTP API
+	HTTPMethod        string `db:"http_method" json:"http_method"`
+	HTTPHealthURL     string `db:"http_health_url" json:"http_health_url"`
+	HTTPExpectedStatus int    `db:"http_expected_status" json:"http_expected_status"`
+
+	// Specific fields for gRPC
+	GRPCHost string `db:"grpc_host" json:"grpc_host"`
+	GRPCPort int    `db:"grpc_port" json:"grpc_port"`
+	GRPCAuth string `db:"grpc_auth" json:"grpc_auth"`
+	GRPCProto string `db:"grpc_proto" json:"grpc_proto"`
+
+	// Specific fields for MQTT
+	MQTTHost string `db:"mqtt_host" json:"mqtt_host"`	
+	MQTTPort int    `db:"mqtt_port" json:"mqtt_port"`
+	MQTTQoS  int    `db:"mqtt_qos" json:"mqtt_qos"`
+	MQTTTopic string `db:"mqtt_topic" json:"mqtt_topic"`
+	MQTTAuth string `db:"mqtt_auth" json:"mqtt_auth"`
+
+	// Specific fields for TCP
+	TCPHost string `db:"tcp_host" json:"tcp_host"`
+	TCPPort int    `db:"tcp_port" json:"tcp_port"`
+
+	// Specific fields for DNS
+	DNSDomainName string `db:"dns_domain_name" json:"dns_domain_name"`
+
+	// Specific fields for Ping
+	PingHost string `db:"ping_host" json:"ping_host"`
 }
 
-type ServiceHTTPConfig struct {
-	ServiceID      uint   `json:"service_id" gorm:"primaryKey"`
-	Path           string `json:"path" gorm:"default:/"`
-	Method         string `json:"method" gorm:"default:GET"`
-	ExpectedStatus int    `json:"expected_status" gorm:"default:200"`
-	RegexMatch     string `json:"regex_match"`
-	SSLCheck       bool   `json:"ssl_check" gorm:"default:true"`
-	
-	// Relationships
-	Service Service `json:"service,omitempty" gorm:"foreignKey:ServiceID"`
-}
-
-type ServiceGRPCConfig struct {
-	ServiceID              uint   `json:"service_id" gorm:"primaryKey"`
-	ServiceName            string `json:"service_name" gorm:"not null"`
-	MethodName             string `json:"method_name" gorm:"not null"`
-	RequestBody            string `json:"request_body"`
-	ExpectedResponseRegex  string `json:"expected_response_regex"`
-	
-	// Relationships
-	Service Service `json:"service,omitempty" gorm:"foreignKey:ServiceID"`
-}
-
-type ServiceTCPConfig struct {
-	ServiceID uint `json:"service_id" gorm:"primaryKey"`
-	TimeoutMs int  `json:"timeout_ms" gorm:"default:5000"`
-	
-	// Relationships
-	Service Service `json:"service,omitempty" gorm:"foreignKey:ServiceID"`
-}
-
-type ServiceMQTTConfig struct {
-	ServiceID uint   `json:"service_id" gorm:"primaryKey"`
-	Topic     string `json:"topic" gorm:"not null"`
-	QoS       int    `json:"qos" gorm:"default:0"`
-	Username  string `json:"username"`
-	Password  string `json:"password"`
-	
-	// Relationships
-	Service Service `json:"service,omitempty" gorm:"foreignKey:ServiceID"`
-}
-
-type ServiceCheckStatus string
-
-const (
-	ServiceCheckStatusUp      ServiceCheckStatus = "up"
-	ServiceCheckStatusDown    ServiceCheckStatus = "down"
-	ServiceCheckStatusUnknown ServiceCheckStatus = "unknown"
-)
-
-type ServiceCheck struct {
-	ID             uint               `json:"id" gorm:"primaryKey"`
-	ServiceID      uint               `json:"service_id" gorm:"not null;index"`
-	Timestamp      time.Time          `json:"timestamp" gorm:"not null;index"`
-	Status         ServiceCheckStatus `json:"status" gorm:"not null"`
-	ResponseTimeMs *int               `json:"response_time_ms"`
-	ErrorMessage   string             `json:"error_message"`
-	
-	// Relationships
-	Service Service `json:"service,omitempty" gorm:"foreignKey:ServiceID"`
+// ServiceStats represents the monitoring statistics for a service
+type ServiceStats struct {
+	ServiceID         uuid.UUID `db:"service_id" json:"service_id"`
+	ResponseTime      float64   `db:"response_time" json:"response_time"`
+	Uptime            float64   `db:"uptime" json:"uptime"` // Percentage
+	LastChecked       time.Time `db:"last_checked" json:"last_checked"`
+	AverageResponseTime float64   `db:"average_response_time" json:"average_response_time"`
+	IncidentTotal     int       `db:"incident_total" json:"incident_total"`
+	CreatedAt         time.Time `db:"created_at" json:"created_at"`
 }
 

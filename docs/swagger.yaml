@@ -1,0 +1,1213 @@
+basePath: /api/v1
+definitions:
+  models.DomainSSL:
+    properties:
+      certificate_detail:
+        description: Parsed SSL/Domain details
+        type: string
+      check_interval:
+        description: in days
+        type: integer
+      created_at:
+        type: string
+      days_left:
+        description: Calculated, not stored
+        type: integer
+      domain:
+        type: string
+      expiry:
+        type: string
+      expiry_threshold:
+        description: Days before expiry to consider expired
+        type: integer
+      id:
+        type: string
+      issuer:
+        type: string
+      label:
+        type: string
+      resolved_ip:
+        type: string
+      updated_at:
+        type: string
+      valid_from:
+        type: string
+      warning_threshold:
+        description: Days before expiry to warn
+        type: integer
+    type: object
+  models.Instance:
+    properties:
+      agent_auth:
+        description: Encrypted agent authentication string
+        type: string
+      agent_port:
+        minimum: 1
+        type: integer
+      check_interval:
+        minimum: 1
+        type: integer
+      check_timeout:
+        minimum: 1
+        type: integer
+      created_at:
+        type: string
+      description:
+        type: string
+      group:
+        type: string
+      host:
+        type: string
+      id:
+        type: string
+      label:
+        type: string
+      name:
+        type: string
+      updated_at:
+        type: string
+    required:
+    - agent_port
+    - check_interval
+    - check_timeout
+    - host
+    - name
+    type: object
+  models.Report:
+    properties:
+      created_at:
+        type: string
+      file_path:
+        description: Path to the generated report file
+        type: string
+      format:
+        description: e.g., "CSV", "PDF", "Excel"
+        type: string
+      generated_at:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      report_type:
+        description: e.g., "instance_summary", "service_uptime"
+        type: string
+      user_id:
+        type: string
+    type: object
+  models.Service:
+    properties:
+      api_type:
+        description: HTTP API, gRPC, MQTT, TCP, DNS, Ping
+        type: string
+      check_interval:
+        description: in seconds
+        type: integer
+      created_at:
+        type: string
+      description:
+        type: string
+      dns_domain_name:
+        description: Specific fields for DNS
+        type: string
+      group:
+        type: string
+      grpc_auth:
+        type: string
+      grpc_host:
+        description: Specific fields for gRPC
+        type: string
+      grpc_port:
+        type: integer
+      grpc_proto:
+        type: string
+      http_expected_status:
+        type: integer
+      http_health_url:
+        type: string
+      http_method:
+        description: Specific fields for HTTP API
+        type: string
+      id:
+        type: string
+      label:
+        type: string
+      mqtt_auth:
+        type: string
+      mqtt_host:
+        description: Specific fields for MQTT
+        type: string
+      mqtt_port:
+        type: integer
+      mqtt_qos:
+        type: integer
+      mqtt_topic:
+        type: string
+      name:
+        type: string
+      ping_host:
+        description: Specific fields for Ping
+        type: string
+      tcp_host:
+        description: Specific fields for TCP
+        type: string
+      tcp_port:
+        type: integer
+      timeout:
+        description: in seconds
+        type: integer
+      updated_at:
+        type: string
+    type: object
+  models.User:
+    properties:
+      created_at:
+        type: string
+      email:
+        type: string
+      id:
+        type: string
+      last_login:
+        type: string
+      password:
+        description: Hashed password
+        type: string
+      role:
+        description: e.g., "admin", "user"
+        type: string
+      status:
+        description: e.g., "active", "inactive"
+        type: string
+      updated_at:
+        type: string
+      username:
+        type: string
+    type: object
+host: localhost:3000
+info:
+  contact:
+    email: support@swagger.io
+    name: API Support
+    url: http://www.swagger.io/support
+  description: This is the API documentation for the Monitron Backend.
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: Monitron Backend API
+  version: "1.0"
+paths:
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticate user and return a JWT token
+      parameters:
+      - description: User credentials
+        in: body
+        name: credentials
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 'message": "Login successful", "token": "<JWT_TOKEN>", "user":
+            "<USER_OBJECT>'
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 'error": "Cannot parse JSON'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: 'error": "Invalid credentials'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: 'error": "Could not generate token'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Log in a user
+      tags:
+      - Authentication
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Register a new user with username, email, and password
+      parameters:
+      - description: User object for registration
+        in: body
+        name: user
+        required: true
+        schema:
+          $ref: '#/definitions/models.User'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.User'
+        "400":
+          description: 'error": "Cannot parse JSON'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: 'error": "Could not register user'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Register a new user
+      tags:
+      - Authentication
+  /domain-ssl:
+    get:
+      description: Retrieve a list of all domain and SSL certificate monitoring entries
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.DomainSSL'
+            type: array
+        "500":
+          description: 'error": "Could not retrieve domain/SSL entries'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Get all domain/SSL entries
+      tags:
+      - Domain & SSL
+    post:
+      consumes:
+      - application/json
+      description: Create a new domain and SSL certificate monitoring entry
+      parameters:
+      - description: Domain/SSL object to be created
+        in: body
+        name: domainSSL
+        required: true
+        schema:
+          $ref: '#/definitions/models.DomainSSL'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.DomainSSL'
+        "400":
+          description: 'error": "Cannot parse JSON'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: 'error": "Could not create domain/SSL entry'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Create a new domain/SSL entry
+      tags:
+      - Domain & SSL
+  /domain-ssl/{id}:
+    delete:
+      description: Delete a domain and SSL certificate monitoring entry by its ID
+      parameters:
+      - description: Domain/SSL ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: 'error": "Invalid domain/SSL ID'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: 'error": "Domain/SSL entry not found'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: 'error": "Could not delete domain/SSL entry'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Delete a domain/SSL entry
+      tags:
+      - Domain & SSL
+    get:
+      description: Retrieve a single domain and SSL certificate monitoring entry by
+        its ID
+      parameters:
+      - description: Domain/SSL ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.DomainSSL'
+        "400":
+          description: 'error": "Invalid domain/SSL ID'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: 'error": "Domain/SSL entry not found'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: 'error": "Could not retrieve domain/SSL entry'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Get domain/SSL entry by ID
+      tags:
+      - Domain & SSL
+    put:
+      consumes:
+      - application/json
+      description: Update details of an existing domain and SSL certificate monitoring
+        entry by its ID
+      parameters:
+      - description: Domain/SSL ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Domain/SSL object with updated fields
+        in: body
+        name: domainSSL
+        required: true
+        schema:
+          $ref: '#/definitions/models.DomainSSL'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.DomainSSL'
+        "400":
+          description: 'error": "Invalid domain/SSL ID" or "Cannot parse JSON'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: 'error": "Domain/SSL entry not found'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: 'error": "Could not update domain/SSL entry'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Update an existing domain/SSL entry
+      tags:
+      - Domain & SSL
+  /graphql:
+    post:
+      consumes:
+      - application/json
+      description: Execute a GraphQL query against the Monitron API
+      parameters:
+      - description: GraphQL query payload
+        in: body
+        name: query
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 'data": "<GraphQL_Response>'
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 'error": "Cannot parse JSON'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: 'error": "Failed to execute GraphQL query'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Execute GraphQL query
+      tags:
+      - GraphQL
+  /instances:
+    get:
+      description: Retrieve a list of all monitoring instances
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.Instance'
+            type: array
+        "500":
+          description: 'error": "Could not retrieve instances'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Get all instances
+      tags:
+      - Instances
+    post:
+      consumes:
+      - application/json
+      description: Create a new monitoring instance
+      parameters:
+      - description: Instance object to be created
+        in: body
+        name: instance
+        required: true
+        schema:
+          $ref: '#/definitions/models.Instance'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.Instance'
+        "400":
+          description: 'error": "Cannot parse JSON'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: 'error": "Could not create instance'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Create a new instance
+      tags:
+      - Instances
+  /instances/{id}:
+    delete:
+      description: Delete a monitoring instance by its ID
+      parameters:
+      - description: Instance ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: 'error": "Invalid instance ID'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: 'error": "Instance not found'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: 'error": "Could not delete instance'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Delete an instance
+      tags:
+      - Instances
+    get:
+      description: Retrieve a single monitoring instance by its ID
+      parameters:
+      - description: Instance ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Instance'
+        "400":
+          description: 'error": "Invalid instance ID'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: 'error": "Instance not found'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: 'error": "Could not retrieve instance'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Get instance by ID
+      tags:
+      - Instances
+    put:
+      consumes:
+      - application/json
+      description: Update details of an existing monitoring instance by its ID
+      parameters:
+      - description: Instance ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Instance object with updated fields
+        in: body
+        name: instance
+        required: true
+        schema:
+          $ref: '#/definitions/models.Instance'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Instance'
+        "400":
+          description: 'error": "Invalid instance ID" or "Cannot parse JSON'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: 'error": "Instance not found'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: 'error": "Could not update instance'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Update an existing instance
+      tags:
+      - Instances
+  /password/forgot:
+    post:
+      consumes:
+      - application/json
+      description: Sends a password reset link to the user\'s email
+      parameters:
+      - description: User email
+        in: body
+        name: email
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 'message": "If an account with that email exists, a password
+            reset link has been sent.'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: 'error": "Cannot parse JSON'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: 'error": "Could not initiate password reset'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Initiate password reset
+      tags:
+      - User Management
+  /password/reset:
+    post:
+      consumes:
+      - application/json
+      description: Resets user password using a valid token
+      parameters:
+      - description: Token and new password
+        in: body
+        name: resetRequest
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 'message": "Password reset successfully'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: 'error": "Invalid or expired token" or "Cannot parse JSON'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: 'error": "Could not reset password'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Reset password with token
+      tags:
+      - User Management
+  /reports:
+    get:
+      description: Retrieve a list of all reports
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.Report'
+            type: array
+        "500":
+          description: 'error": "Could not retrieve reports'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Get all reports
+      tags:
+      - Reports
+    post:
+      consumes:
+      - application/json
+      description: Create a new report entry and queue it for generation
+      parameters:
+      - description: Report object to be created
+        in: body
+        name: report
+        required: true
+        schema:
+          $ref: '#/definitions/models.Report'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.Report'
+        "400":
+          description: 'error": "Cannot parse JSON'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: 'error": "Could not create report'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Create a new report
+      tags:
+      - Reports
+  /reports/{id}:
+    get:
+      description: Retrieve a single report by its ID
+      parameters:
+      - description: Report ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Report'
+        "400":
+          description: 'error": "Invalid report ID'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: 'error": "Report not found'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: 'error": "Could not retrieve report'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Get report by ID
+      tags:
+      - Reports
+  /services:
+    get:
+      description: Retrieve a list of all monitoring services
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.Service'
+            type: array
+        "500":
+          description: 'error": "Could not retrieve services'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Get all services
+      tags:
+      - Services
+    post:
+      consumes:
+      - application/json
+      description: Create a new monitoring service
+      parameters:
+      - description: Service object to be created
+        in: body
+        name: service
+        required: true
+        schema:
+          $ref: '#/definitions/models.Service'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.Service'
+        "400":
+          description: 'error": "Cannot parse JSON'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: 'error": "Could not create service'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Create a new service
+      tags:
+      - Services
+  /services/{id}:
+    delete:
+      description: Delete a monitoring service by its ID
+      parameters:
+      - description: Service ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: 'error": "Invalid service ID'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: 'error": "Service not found'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: 'error": "Could not delete service'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Delete a service
+      tags:
+      - Services
+    get:
+      description: Retrieve a single monitoring service by its ID
+      parameters:
+      - description: Service ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Service'
+        "400":
+          description: 'error": "Invalid service ID'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: 'error": "Service not found'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: 'error": "Could not retrieve service'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Get service by ID
+      tags:
+      - Services
+    put:
+      consumes:
+      - application/json
+      description: Update details of an existing monitoring service by its ID
+      parameters:
+      - description: Service ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Service object with updated fields
+        in: body
+        name: service
+        required: true
+        schema:
+          $ref: '#/definitions/models.Service'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Service'
+        "400":
+          description: 'error": "Invalid service ID" or "Cannot parse JSON'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: 'error": "Service not found'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: 'error": "Could not update service'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Update an existing service
+      tags:
+      - Services
+  /user/change-password:
+    put:
+      consumes:
+      - application/json
+      description: Allows an authenticated user to change their password
+      parameters:
+      - description: Current and new passwords
+        in: body
+        name: passwordChange
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 'message": "Password changed successfully'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: 'error": "Cannot parse JSON'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: 'error": "Invalid current password'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: 'error": "Could not change password'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Change password for authenticated user
+      tags:
+      - User Management
+  /users:
+    get:
+      description: Retrieve a list of all registered users
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.User'
+            type: array
+        "500":
+          description: 'error": "Could not retrieve users'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Get all users (Admin Only)
+      tags:
+      - User Management
+  /users/{id}:
+    delete:
+      description: Delete a user by their ID
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: 'error": "Invalid user ID'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: 'error": "User not found'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: 'error": "Could not delete user'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Delete a user (Admin Only)
+      tags:
+      - User Management
+    get:
+      description: Retrieve a single user by their ID
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.User'
+        "400":
+          description: 'error": "Invalid user ID'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: 'error": "User not found'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: 'error": "Could not retrieve user'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Get user by ID (Admin Only)
+      tags:
+      - User Management
+    put:
+      consumes:
+      - application/json
+      description: Update details of an existing user by their ID
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: User object with updated fields
+        in: body
+        name: user
+        required: true
+        schema:
+          $ref: '#/definitions/models.User'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.User'
+        "400":
+          description: 'error": "Invalid user ID" or "Cannot parse JSON'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: 'error": "User not found'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: 'error": "Could not update user'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Update an existing user (Admin Only)
+      tags:
+      - User Management
+securityDefinitions:
+  ApiKeyAuth:
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
